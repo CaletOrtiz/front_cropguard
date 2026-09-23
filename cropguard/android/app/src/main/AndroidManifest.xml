@@ -1,4 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Permiso para usar la cámara -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+
+    <!-- Permisos para leer imágenes de la galería -->
+    <!-- Para Android 12 o versiones anteriores -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+
+    <!-- Para Android 13 en adelante (API 33+) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+
     <application
         android:label="cropguard"
         android:name="${applicationName}"
