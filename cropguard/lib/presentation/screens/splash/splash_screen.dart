@@ -22,10 +22,12 @@ class SplashScreen extends StatelessWidget {
               child: Column(
                 children: [
                   const Spacer(flex: 5),
-                  const KroppiWordmark(
+                  AnimatedKroppiWordmark(
                     fontSize: 48,
                     textColor: AppColors.primaryDark,
                     leafColor: AppColors.primary,
+                    duration: const Duration(milliseconds: 900),
+                    delay: const Duration(milliseconds: 200),
                   ),
                   const SizedBox(height: 8),
                   const Text(

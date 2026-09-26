@@ -60,3 +60,77 @@ class KroppiWordmark extends StatelessWidget {
     );
   }
 }
+
+/// Reproduce una animación de "escritura" (reveal de izquierda a derecha)
+/// sobre KroppiWordmark, una sola vez al construirse.
+class AnimatedKroppiWordmark extends StatefulWidget {
+  const AnimatedKroppiWordmark({
+    super.key,
+    this.fontSize = 32,
+    this.textColor = AppColors.primaryDark,
+    this.leafColor = AppColors.primary,
+    this.duration = const Duration(milliseconds: 900),
+    this.delay = Duration.zero,
+    this.onComplete,
+  });
+
+  final double fontSize;
+  final Color textColor;
+  final Color leafColor;
+  final Duration duration;
+  final Duration delay;
+  final VoidCallback? onComplete;
+
+  @override
+  State<AnimatedKroppiWordmark> createState() => _AnimatedKroppiWordmarkState();
+}
+
+class _AnimatedKroppiWordmarkState extends State<AnimatedKroppiWordmark>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _reveal;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: widget.duration);
+    _reveal = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
+
+    if (widget.onComplete != null) {
+      _controller.addStatusListener((status) {
+        if (status == AnimationStatus.completed) widget.onComplete!();
+      });
+    }
+
+    Future.delayed(widget.delay, () {
+      if (mounted) _controller.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _reveal,
+      builder: (context, child) {
+        return ClipRect(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            widthFactor: _reveal.value,
+            child: child,
+          ),
+        );
+      },
+      child: KroppiWordmark(
+        fontSize: widget.fontSize,
+        textColor: widget.textColor,
+        leafColor: widget.leafColor,
+      ),
+    );
+  }
+}
