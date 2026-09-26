@@ -9,6 +9,7 @@ class PrimaryButton extends StatelessWidget {
     required this.onPressed,
     this.isLoading = false,
     this.colors,
+    this.dark = false,
   });
 
   final String label;
@@ -16,10 +17,13 @@ class PrimaryButton extends StatelessWidget {
   final bool isLoading;
   final List<Color>? colors;
 
+  /// Si es true, usa una píldora negra en vez del degradado verde.
+  final bool dark;
+
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !isLoading;
-    final radius = BorderRadius.circular(AppSpacing.radius);
+    final radius = BorderRadius.circular(dark ? 999 : AppSpacing.radius);
 
     return Opacity(
       opacity: onPressed == null ? 0.5 : 1,
@@ -27,16 +31,23 @@ class PrimaryButton extends StatelessWidget {
         height: AppSpacing.buttonHeight,
         decoration: BoxDecoration(
           borderRadius: radius,
-          gradient: LinearGradient(
-            colors: colors ?? const [AppColors.primaryDark, AppColors.primary],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryDark.withValues(alpha: 0.25),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
+          color: dark ? const Color(0xFF1A1A1A) : null,
+          gradient: dark
+              ? null
+              : LinearGradient(
+                  colors:
+                      colors ??
+                      const [AppColors.primaryDark, AppColors.primary],
+                ),
+          boxShadow: dark
+              ? null
+              : [
+                  BoxShadow(
+                    color: AppColors.primaryDark.withValues(alpha: 0.25),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
         ),
         child: Material(
           color: Colors.transparent,

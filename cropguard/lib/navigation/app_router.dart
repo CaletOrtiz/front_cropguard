@@ -6,6 +6,12 @@ import 'package:cropguard/presentation/screens/auth/login_screen.dart';
 import 'package:cropguard/presentation/screens/auth/register_screen.dart';
 import 'package:cropguard/presentation/screens/home/home_screen.dart';
 import 'package:cropguard/presentation/screens/shell/main_shell.dart';
+import 'package:cropguard/presentation/screens/history/history_screen.dart';
+import 'package:cropguard/presentation/screens/crops/crops_screen.dart';
+import 'package:cropguard/presentation/screens/crops/crop_detail_screen.dart';
+import 'package:cropguard/presentation/screens/recommendations/recommendations_screen.dart';
+import 'package:cropguard/presentation/screens/profile/profile_screen.dart';
+import 'package:cropguard/presentation/screens/history/diagnosis_detail_screen.dart';
 
 class AppRouter {
   AppRouter._();
@@ -43,8 +49,7 @@ class AppRouter {
             routes: [
               GoRoute(
                 path: AppRoutes.history,
-                builder: (context, state) =>
-                    const PlaceholderScreen(title: 'Historial'),
+                builder: (context, state) => const HistoryScreen(),
               ),
             ],
           ),
@@ -52,8 +57,7 @@ class AppRouter {
             routes: [
               GoRoute(
                 path: AppRoutes.crops,
-                builder: (context, state) =>
-                    const PlaceholderScreen(title: 'Cultivos'),
+                builder: (context, state) => const CropsScreen(),
               ),
             ],
           ),
@@ -61,8 +65,7 @@ class AppRouter {
             routes: [
               GoRoute(
                 path: AppRoutes.profile,
-                builder: (context, state) =>
-                    const PlaceholderScreen(title: 'Perfil'),
+                builder: (context, state) => const ProfileScreen(),
               ),
             ],
           ),
@@ -77,13 +80,28 @@ class AppRouter {
       ),
       GoRoute(
         path: AppRoutes.recommendations,
-        builder: (context, state) =>
-            const PlaceholderScreen(title: 'Recomendaciones'),
+        builder: (context, state) => const RecommendationsScreen(),
       ),
       GoRoute(
         path: AppRoutes.notifications,
         builder: (context, state) =>
             const PlaceholderScreen(title: 'Notificaciones'),
+      ),
+      GoRoute(
+        path: AppRoutes.help,
+        builder: (context, state) =>
+            const PlaceholderScreen(title: 'Ayuda y soporte'),
+      ),
+      GoRoute(
+        path: AppRoutes.cropDetail,
+        builder: (context, state) =>
+            CropDetailScreen(cropId: state.pathParameters['cropId']!),
+      ),
+      GoRoute(
+        path: AppRoutes.diagnosisDetail,
+        builder: (context, state) => DiagnosisDetailScreen(
+          diagnosisId: state.pathParameters['diagnosisId']!,
+        ),
       ),
     ],
   );

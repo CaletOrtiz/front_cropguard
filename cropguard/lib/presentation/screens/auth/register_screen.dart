@@ -91,7 +91,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     const SizedBox(height: 24),
                     PrimaryButton(
-                      label: AppStrings.register,
+                      label: AppStrings.login,
+                      dark: true,
                       onPressed: _submit,
                     ),
                     const SizedBox(height: 8),

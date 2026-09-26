@@ -2,7 +2,7 @@ class AppStrings {
   AppStrings._();
 
   // General
-  static const appName = 'CropGuard';
+  static const appName = 'Kroppi';
   static const slogan = 'Tecnología que cuida el campo';
   static const tagline = 'Detecta • Previene • Protege';
   static const start = 'Comenzar';
@@ -56,4 +56,43 @@ class AppStrings {
   static const analyzingHint =
       'Identificando patrones morfológicos de la hoja.';
   static const cnnNote = 'Modelo de visión computacional (CNN)';
+
+  // Historial
+  static const historyTitle = 'Historial de diagnósticos';
+  static const searchHint = 'Buscar por patógeno o cultivo';
+  static const filterAll = 'Todos';
+  static const emptyHistoryTitle = 'Aún no tienes diagnósticos';
+  static const emptyHistorySubtitle =
+      'Los análisis que guardes aparecerán aquí.';
+
+  // Cultivos
+  static const cropsTitle = 'Guía de cultivos';
+  static const cropsSubtitle =
+      'Aprende a identificar y prevenir enfermedades comunes.';
+  static const commonDiseases = 'Enfermedades comunes';
+  static const characteristicSymptoms = 'Síntomas característicos';
+  static const monitoringTipsTitle = 'Consejos de monitoreo';
+  static const preventionTipsTitle = 'Recomendaciones preventivas';
+
+  // Recomendaciones
+  static const recommendationsTitle = 'Recomendaciones';
+  static const recommendationsSubtitle =
+      'Prácticas de manejo y prevención para tu cultivo.';
+
+  // Perfil
+  static const profileTitle = 'Perfil';
+  static const myCrops = 'Mis cultivos';
+  static const notificationsMenu = 'Notificaciones';
+  static const helpSupport = 'Ayuda y soporte';
+  static const logout = 'Cerrar sesión';
+  static const logoutConfirmTitle = '¿Cerrar sesión?';
+  static const logoutConfirmMessage =
+      'Tendrás que iniciar sesión de nuevo para usar CropGuard.';
+  static const cancel = 'Cancelar';
+
+  // Resultado / detalle de diagnóstico
+  static const possiblePathogen = 'Posible patógeno';
+  static const symptomsObserved = 'Síntomas observados';
+  static const diagnosisDisclaimer =
+      'Resultado preliminar basado en análisis visual. Para confirmación definitiva consulte un especialista o realice análisis de laboratorio.';
 }

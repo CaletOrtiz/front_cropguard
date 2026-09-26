@@ -80,7 +80,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       onSubmitted: (_) => _submit(),
                     ),
                     const SizedBox(height: 24),
-                    PrimaryButton(label: AppStrings.login, onPressed: _submit),
+                    PrimaryButton(
+                      label: AppStrings.login,
+                      dark: true,
+                      onPressed: _submit,
+                    ),
                     const SizedBox(height: 8),
                     AuthSwitchPrompt(
                       prompt: AppStrings.noAccount,
