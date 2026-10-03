@@ -1,8 +1,51 @@
 import 'package:flutter/material.dart';
 import 'package:cropguard/core/constants/app_colors.dart';
 
-/// Wordmark de Kroppi: texto "Kropp" + una "i" personalizada,
-/// donde el punto se reemplaza por una hoja.
+/// Solo la marca: hoja + barra (la "i" de Kroppi), sin el resto del texto.
+class KroppiMark extends StatelessWidget {
+  const KroppiMark({
+    super.key,
+    this.fontSize = 32,
+    this.textColor = AppColors.primaryDark,
+    this.leafColor = AppColors.primary,
+  });
+
+  final double fontSize;
+  final Color textColor;
+  final Color leafColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final stemHeight = fontSize * 0.5;
+    final stemWidth = fontSize * 0.09;
+    final leafSize = fontSize * 0.42;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Transform.translate(
+          offset: Offset(stemWidth * 0.3, fontSize * 0.06),
+          child: Transform.rotate(
+            angle: -0.5,
+            child: Icon(Icons.eco_rounded, size: leafSize, color: leafColor),
+          ),
+        ),
+        SizedBox(height: fontSize * 0.01),
+        Container(
+          width: stemWidth,
+          height: stemHeight,
+          decoration: BoxDecoration(
+            color: textColor,
+            borderRadius: BorderRadius.circular(stemWidth),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Wordmark completo: "Kropp" + KroppiMark, estático (sin animación).
 class KroppiWordmark extends StatelessWidget {
   const KroppiWordmark({
     super.key,
@@ -17,10 +60,7 @@ class KroppiWordmark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final stemHeight = fontSize * 0.5;
-    final stemWidth = fontSize * 0.1;
-    final leafSize = fontSize * 0.42;
-    final gap = fontSize * 0;
+    final gap = fontSize * 0.02;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -36,73 +76,106 @@ class KroppiWordmark extends StatelessWidget {
           ),
         ),
         SizedBox(width: gap),
-        // "i" personalizada: barra + hoja en vez del punto
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Transform.rotate(
-              angle: -0.5,
-              child: Icon(Icons.eco_rounded, size: leafSize, color: leafColor),
-            ),
-            SizedBox(height: fontSize * 0.04),
-            Container(
-              width: stemWidth,
-              height: stemHeight,
-              decoration: BoxDecoration(
-                color: textColor,
-                borderRadius: BorderRadius.circular(stemWidth),
-              ),
-            ),
-          ],
+        KroppiMark(
+          fontSize: fontSize,
+          textColor: textColor,
+          leafColor: leafColor,
         ),
       ],
     );
   }
 }
 
-/// Reproduce una animación de "escritura" (reveal de izquierda a derecha)
-/// sobre KroppiWordmark, una sola vez al construirse.
-class AnimatedKroppiWordmark extends StatefulWidget {
-  const AnimatedKroppiWordmark({
+/// Secuencia de intro: 1) solo la marca, grande y centrada; 2) un
+/// crossfade con leve escala hacia el wordmark completo; 3) el eslogan
+/// aparece debajo. Todo se centra de forma natural (sin medir anchos).
+class KroppiIntroAnimation extends StatefulWidget {
+  const KroppiIntroAnimation({
     super.key,
-    this.fontSize = 32,
+    this.fontSize = 48,
     this.textColor = AppColors.primaryDark,
     this.leafColor = AppColors.primary,
-    this.duration = const Duration(milliseconds: 900),
-    this.delay = Duration.zero,
-    this.onComplete,
+    this.iconOnlyScale = 2.2,
+    this.slogan,
+    this.sloganStyle,
+    this.holdDuration = const Duration(milliseconds: 600),
+    this.writeDuration = const Duration(milliseconds: 500),
+    this.sloganDuration = const Duration(milliseconds: 400),
+    this.startDelay = const Duration(milliseconds: 150),
   });
 
   final double fontSize;
   final Color textColor;
   final Color leafColor;
-  final Duration duration;
-  final Duration delay;
-  final VoidCallback? onComplete;
+  final double iconOnlyScale;
+  final String? slogan;
+  final TextStyle? sloganStyle;
+  final Duration holdDuration;
+  final Duration writeDuration;
+  final Duration sloganDuration;
+  final Duration startDelay;
 
   @override
-  State<AnimatedKroppiWordmark> createState() => _AnimatedKroppiWordmarkState();
+  State<KroppiIntroAnimation> createState() => _KroppiIntroAnimationState();
 }
 
-class _AnimatedKroppiWordmarkState extends State<AnimatedKroppiWordmark>
+class _KroppiIntroAnimationState extends State<KroppiIntroAnimation>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
-  late final Animation<double> _reveal;
+  late final Animation<double> _markOpacity;
+  late final Animation<double> _markScale;
+  late final Animation<double> _wordOpacity;
+  late final Animation<double> _wordScale;
+  late final Animation<double> _sloganOpacity;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: widget.duration);
-    _reveal = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
 
-    if (widget.onComplete != null) {
-      _controller.addStatusListener((status) {
-        if (status == AnimationStatus.completed) widget.onComplete!();
-      });
-    }
+    final holdMs = widget.holdDuration.inMilliseconds;
+    final writeMs = widget.writeDuration.inMilliseconds;
+    final sloganMs = widget.sloganDuration.inMilliseconds;
+    final totalMs = holdMs + writeMs + sloganMs;
+    final safeTotal = totalMs == 0 ? 1 : totalMs;
 
-    Future.delayed(widget.delay, () {
+    _controller = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: safeTotal),
+    );
+
+    final holdEnd = holdMs / safeTotal;
+    final writeEnd = (holdMs + writeMs) / safeTotal;
+
+    final crossfade = CurvedAnimation(
+      parent: _controller,
+      curve: Interval(
+        holdEnd,
+        writeEnd.clamp(holdEnd, 1.0),
+        curve: Curves.easeInOutCubic,
+      ),
+    );
+
+    _markOpacity = Tween(begin: 1.0, end: 0.0).animate(crossfade);
+    _markScale = Tween(begin: widget.iconOnlyScale, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Interval(
+          holdEnd,
+          writeEnd.clamp(holdEnd, 1.0),
+          curve: Curves.easeInOutCubic,
+        ),
+      ),
+    );
+
+    _wordOpacity = Tween(begin: 0.0, end: 1.0).animate(crossfade);
+    _wordScale = Tween(begin: 0.92, end: 1.0).animate(crossfade);
+
+    _sloganOpacity = CurvedAnimation(
+      parent: _controller,
+      curve: Interval(writeEnd.clamp(0.0, 1.0), 1.0, curve: Curves.easeOut),
+    );
+
+    Future.delayed(widget.startDelay, () {
       if (mounted) _controller.forward();
     });
   }
@@ -115,21 +188,64 @@ class _AnimatedKroppiWordmarkState extends State<AnimatedKroppiWordmark>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _reveal,
-      builder: (context, child) {
-        return ClipRect(
-          child: Align(
-            alignment: Alignment.centerLeft,
-            widthFactor: _reveal.value,
-            child: child,
+    return SizedBox(
+      width: double.infinity,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (context, _) {
+              return SizedBox(
+                width: double.infinity,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Wordmark completo
+                    Opacity(
+                      opacity: _wordOpacity.value,
+                      child: Transform.scale(
+                        scale: _wordScale.value,
+                        child: KroppiWordmark(
+                          fontSize: widget.fontSize,
+                          textColor: widget.textColor,
+                          leafColor: widget.leafColor,
+                        ),
+                      ),
+                    ),
+
+                    // Marca sola (hoja + barra)
+                    Opacity(
+                      opacity: _markOpacity.value,
+                      child: Transform.scale(
+                        scale: _markScale.value,
+                        child: KroppiMark(
+                          fontSize: widget.fontSize,
+                          textColor: widget.textColor,
+                          leafColor: widget.leafColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
-        );
-      },
-      child: KroppiWordmark(
-        fontSize: widget.fontSize,
-        textColor: widget.textColor,
-        leafColor: widget.leafColor,
+
+          if (widget.slogan != null) ...[
+            const SizedBox(height: 8),
+
+            FadeTransition(
+              opacity: _sloganOpacity,
+              child: Text(
+                widget.slogan!,
+                textAlign: TextAlign.center,
+                style: widget.sloganStyle,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

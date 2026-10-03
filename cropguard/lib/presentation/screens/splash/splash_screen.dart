@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:cropguard/core/constants/app_colors.dart';
 import 'package:cropguard/core/constants/app_strings.dart';
 import 'package:cropguard/navigation/app_routes.dart';
-import 'package:cropguard/presentation/common/aura_background.dart';
 import 'package:cropguard/presentation/common/kroppi_logo.dart';
 
 class SplashScreen extends StatelessWidget {
@@ -12,56 +11,45 @@ class SplashScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          const AuraBackground(),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                children: [
-                  const Spacer(flex: 5),
-                  AnimatedKroppiWordmark(
-                    fontSize: 48,
-                    textColor: AppColors.primaryDark,
-                    leafColor: AppColors.primary,
-                    duration: const Duration(milliseconds: 900),
-                    delay: const Duration(milliseconds: 200),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    AppStrings.slogan,
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 16,
-                    ),
-                  ),
-                  const Spacer(flex: 5),
-                  _DarkPillButton(
-                    label: AppStrings.start,
-                    onPressed: () => context.go(AppRoutes.register),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    AppStrings.poweredByAi,
-                    style: TextStyle(
-                      color: AppColors.textSecondary.withValues(alpha: 0.8),
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
+      backgroundColor: AppColors.splashBackground,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            children: [
+              const Spacer(flex: 5),
+              KroppiIntroAnimation(
+                fontSize: 48,
+                textColor: AppColors.splashOnColor,
+                leafColor: AppColors.splashOnColor,
+                slogan: AppStrings.slogan,
+                sloganStyle: TextStyle(
+                  color: AppColors.splashOnColor.withValues(alpha: 0.75),
+                  fontSize: 16,
+                ),
               ),
-            ),
+              const Spacer(flex: 5),
+              _DarkPillButton(
+                label: AppStrings.start,
+                onPressed: () => context.go(AppRoutes.register),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                AppStrings.poweredByAi,
+                style: TextStyle(
+                  color: AppColors.splashOnColor.withValues(alpha: 0.6),
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-/// Botón tipo píldora, oscuro, de ancho ajustado al contenido.
 class _DarkPillButton extends StatelessWidget {
   const _DarkPillButton({required this.label, required this.onPressed});
 
@@ -71,7 +59,7 @@ class _DarkPillButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFF1A1A1A),
+      color: AppColors.splashOnColor,
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         borderRadius: BorderRadius.circular(999),

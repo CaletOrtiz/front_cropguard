@@ -95,4 +95,13 @@ class AppStrings {
   static const symptomsObserved = 'Síntomas observados';
   static const diagnosisDisclaimer =
       'Resultado preliminar basado en análisis visual. Para confirmación definitiva consulte un especialista o realice análisis de laboratorio.';
+
+  static const seeAll = 'Ver todos';
+  static const myDiagnosesHint = 'Revisa tus análisis anteriores';
+  static const cropGuideHint = 'Aprende sobre tus cultivos';
+  static const recommendationsHint = 'Consejos personalizados para tu cultivo';
+  static const profileHint = 'Gestiona tu cuenta y datos';
+
+  static const searchCropHint = 'Buscar cultivo...';
+  static const noCropsFound = 'No encontramos cultivos con ese nombre.';
 }
