@@ -56,7 +56,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(
                             fontWeight: FontWeight.w700,
-                            color: AppColors.primaryDark,
+                            color: AppColors.splashOnColor,
                           ),
                     ),
                     const SizedBox(height: 4),

@@ -54,7 +54,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(
                             fontWeight: FontWeight.w700,
-                            color: AppColors.primaryDark,
+                            color: AppColors.splashOnColor,
                           ),
                     ),
                     const SizedBox(height: 4),

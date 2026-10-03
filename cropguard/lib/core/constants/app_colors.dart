@@ -16,4 +16,8 @@ class AppColors {
   static const Color oliveDark = Color(
     0xFF33400F,
   ); // tarjetas de accesos rápidos
+  static const Color splashBackground = Color(0xFFA6E65C); // verde brillante
+  static const Color splashOnColor = Color(
+    0xFF0F2E1B,
+  ); // texto/ícono sobre el verde
 }

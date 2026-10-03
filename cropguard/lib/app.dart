@@ -13,16 +13,32 @@ class CropGuardApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       routerConfig: AppRouter.router,
-      // Limita el ancho para previsualizar como móvil en web/escritorio
-      builder: (context, child) => ColoredBox(
-        color: const Color(0xFFF3F4F6),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 430),
-            child: child,
+      builder: (context, child) {
+        final isWideScreen = MediaQuery.of(context).size.width > 600;
+        if (!isWideScreen || child == null) return child ?? const SizedBox();
+
+        return ColoredBox(
+          color: const Color(0xFFE5E5E5),
+          child: Center(
+            child: Container(
+              width: 390,
+              height: 844,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(40),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.25),
+                    blurRadius: 40,
+                    offset: const Offset(0, 16),
+                  ),
+                ],
+              ),
+              child: child,
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
