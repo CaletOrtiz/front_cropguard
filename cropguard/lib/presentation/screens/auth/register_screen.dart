@@ -3,11 +3,14 @@ import 'package:go_router/go_router.dart';
 import 'package:cropguard/core/constants/app_strings.dart';
 import 'package:cropguard/core/utils/validators.dart';
 import 'package:cropguard/navigation/app_routes.dart';
+import 'package:cropguard/features/auth/domain/usescases/sign_in_with_google_usecase.dart';
 import 'package:cropguard/presentation/screens/auth/widgets/auth_input_field.dart';
 import 'package:cropguard/presentation/screens/auth/widgets/auth_screen_layout.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
+  const RegisterScreen({super.key, required this.signInWithGoogle});
+
+  final SignInWithGoogleUsecase signInWithGoogle;
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -18,6 +21,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _isGoogleSignInLoading = false;
 
   @override
   void dispose() {
@@ -39,6 +43,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
       context.pop();
     } else {
       context.go(AppRoutes.login);
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() => _isGoogleSignInLoading = true);
+    try {
+      await widget.signInWithGoogle();
+      if (mounted) context.go(AppRoutes.home);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('No se pudo crear la cuenta: $error')));
+    } finally {
+      if (mounted) setState(() => _isGoogleSignInLoading = false);
     }
   }
 
@@ -80,9 +99,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       switchPrompt: AppStrings.haveAccount,
       switchActionLabel: AppStrings.signInLink,
       onSwitchPressed: () => context.go(AppRoutes.login),
-      onGooglePressed: () {
-        // TODO: autenticación con Google
-      },
+      onGooglePressed: _isGoogleSignInLoading ? null : _signInWithGoogle,
+      isGoogleLoading: _isGoogleSignInLoading,
       onBack: _goBack,
     );
   }

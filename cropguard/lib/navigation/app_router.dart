@@ -14,6 +14,12 @@ import 'package:cropguard/presentation/screens/crops/crop_detail_screen.dart';
 import 'package:cropguard/presentation/screens/recommendations/recommendations_screen.dart';
 import 'package:cropguard/presentation/screens/profile/profile_screen.dart';
 import 'package:cropguard/presentation/screens/history/diagnosis_detail_screen.dart';
+import 'package:cropguard/core/network/supabase/supabase_auth_service.dart';
+import 'package:cropguard/core/network/supabase/supabase_client.dart'
+    as app_supabase;
+import 'package:cropguard/features/auth/data/datasources/auth_remote_data_source.dart';
+import 'package:cropguard/features/auth/data/repositories/auth_repository_impl.dart';
+import 'package:cropguard/features/auth/domain/usescases/sign_in_with_google_usecase.dart';
 
 import '../features/crop_diagnosis/data/repositories/crop_diagnosis_repository_impl.dart';
 import '../features/crop_diagnosis/domain/usecases/analyze_crop_image_usecase.dart';
@@ -34,6 +40,15 @@ class AppRouter {
   // 3. Instancia del Caso de Uso (AQUÍ USAS LA VARIABLE DECLARADA ARRIBA)
   static final AnalyzeCropImageUsecase _analyzeCropImageUsecase =
       AnalyzeCropImageUsecase(repository: _diagnosisRepository);
+  static final SignInWithGoogleUsecase _signInWithGoogleUsecase =
+      SignInWithGoogleUsecase(
+        AuthRepositoryImpl(
+          AuthRemoteDataSource(
+            SupabaseAuthService(app_supabase.SupabaseClient.client),
+          ),
+        ),
+      );
+
   static final GoRouter router = GoRouter(
     initialLocation: AppRoutes.splash,
     routes: [
@@ -43,11 +58,13 @@ class AppRouter {
       ),
       GoRoute(
         path: AppRoutes.login,
-        builder: (context, state) => const LoginScreen(),
+        builder: (context, state) =>
+            LoginScreen(signInWithGoogle: _signInWithGoogleUsecase),
       ),
       GoRoute(
         path: AppRoutes.register,
-        builder: (context, state) => const RegisterScreen(),
+        builder: (context, state) =>
+            RegisterScreen(signInWithGoogle: _signInWithGoogleUsecase),
       ),
 
       // Pestañas con barra de navegación inferior
