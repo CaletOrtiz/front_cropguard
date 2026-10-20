@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cropguard/core/constants/app_colors.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
 
 /// "¿No tienes cuenta? Regístrate" / "¿Ya tienes cuenta? Inicia sesión"
 class AuthSwitchPrompt extends StatelessWidget {

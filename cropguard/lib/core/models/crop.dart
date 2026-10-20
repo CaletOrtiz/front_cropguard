@@ -1,4 +1,4 @@
-import 'package:cropguard/core/constants/app_assets.dart';
+import 'package:kroppi/core/constants/app_assets.dart';
 
 class Crop {
   const Crop({

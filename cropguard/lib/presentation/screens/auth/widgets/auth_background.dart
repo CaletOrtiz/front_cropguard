@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:cropguard/core/constants/app_colors.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
 
 /// Fondo de las pantallas de autenticación: degradado lima, hojas que se
 /// mecen suavemente y paisaje con tractor al pie.

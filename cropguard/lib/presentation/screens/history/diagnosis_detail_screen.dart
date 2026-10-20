@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:cropguard/core/models/diagnosis_record.dart';
-import 'package:cropguard/presentation/common/diagnosis_result_view.dart';
+import 'package:kroppi/core/models/diagnosis_record.dart';
+import 'package:kroppi/presentation/common/diagnosis_result_view.dart';
 
 class DiagnosisDetailScreen extends StatelessWidget {
   const DiagnosisDetailScreen({super.key, required this.diagnosisId});

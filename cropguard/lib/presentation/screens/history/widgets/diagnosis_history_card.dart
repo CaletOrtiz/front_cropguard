@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:cropguard/core/constants/app_colors.dart';
-import 'package:cropguard/core/models/diagnosis_record.dart';
-import 'package:cropguard/core/utils/date_formatter.dart';
-import 'package:cropguard/presentation/common/confidence_badge.dart';
-import 'package:cropguard/presentation/common/crop_visual.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/core/models/diagnosis_record.dart';
+import 'package:kroppi/core/utils/date_formatter.dart';
+import 'package:kroppi/presentation/common/confidence_badge.dart';
+import 'package:kroppi/presentation/common/crop_visual.dart';
 
 class DiagnosisHistoryCard extends StatelessWidget {
   const DiagnosisHistoryCard({

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:cropguard/core/constants/app_colors.dart';
-import 'package:cropguard/core/constants/app_spacing.dart';
-import 'package:cropguard/core/constants/app_strings.dart';
-import 'package:cropguard/presentation/common/kroppi_logo.dart';
-import 'package:cropguard/presentation/screens/auth/widgets/auth_background.dart';
-import 'package:cropguard/presentation/screens/auth/widgets/auth_buttons.dart';
-import 'package:cropguard/presentation/screens/auth/widgets/auth_switch_prompt.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/core/constants/app_spacing.dart';
+import 'package:kroppi/core/constants/app_strings.dart';
+import 'package:kroppi/presentation/common/kroppi_logo.dart';
+import 'package:kroppi/presentation/screens/auth/widgets/auth_background.dart';
+import 'package:kroppi/presentation/screens/auth/widgets/auth_buttons.dart';
+import 'package:kroppi/presentation/screens/auth/widgets/auth_switch_prompt.dart';
 
 /// Layout compartido por Login y Registro: fondo con paisaje, logo,
 /// tarjeta blanca con formulario, botón principal, enlace de cambio

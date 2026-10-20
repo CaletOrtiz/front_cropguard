@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:cropguard/core/constants/app_strings.dart';
-import 'package:cropguard/navigation/app_router.dart';
-import 'package:cropguard/presentation/themes/app_theme.dart';
+import 'package:kroppi/core/constants/app_strings.dart';
+import 'package:kroppi/navigation/app_router.dart';
+import 'package:kroppi/presentation/themes/app_theme.dart';
 
 class CropGuardApp extends StatelessWidget {
   const CropGuardApp({super.key});

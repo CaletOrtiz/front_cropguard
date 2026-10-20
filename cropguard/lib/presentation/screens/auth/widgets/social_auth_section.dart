@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:cropguard/core/constants/app_colors.dart';
-import 'package:cropguard/core/constants/app_strings.dart';
-import 'package:cropguard/presentation/common/social_button.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/core/constants/app_strings.dart';
+import 'package:kroppi/presentation/common/social_button.dart';
 
 class SocialAuthSection extends StatelessWidget {
   const SocialAuthSection({super.key});

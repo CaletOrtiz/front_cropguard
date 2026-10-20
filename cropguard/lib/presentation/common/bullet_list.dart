@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cropguard/core/constants/app_colors.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
 
 class BulletList extends StatelessWidget {
   const BulletList({super.key, required this.items, this.icon = Icons.circle});

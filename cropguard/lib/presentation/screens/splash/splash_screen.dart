@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cropguard/core/constants/app_colors.dart';
-import 'package:cropguard/core/constants/app_strings.dart';
-import 'package:cropguard/navigation/app_routes.dart';
-import 'package:cropguard/presentation/common/kroppi_logo.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/core/constants/app_strings.dart';
+import 'package:kroppi/navigation/app_routes.dart';
+import 'package:kroppi/presentation/common/kroppi_logo.dart';
 
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});

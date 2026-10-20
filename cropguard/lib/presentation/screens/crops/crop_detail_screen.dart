@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:cropguard/core/constants/app_colors.dart';
-import 'package:cropguard/core/constants/app_strings.dart';
-import 'package:cropguard/core/models/crop.dart';
-import 'package:cropguard/presentation/common/bullet_list.dart';
-import 'package:cropguard/presentation/common/crop_visual.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/core/constants/app_strings.dart';
+import 'package:kroppi/core/models/crop.dart';
+import 'package:kroppi/presentation/common/bullet_list.dart';
+import 'package:kroppi/presentation/common/crop_visual.dart';
 
 class CropDetailScreen extends StatelessWidget {
   const CropDetailScreen({super.key, required this.cropId});

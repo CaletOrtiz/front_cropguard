@@ -13,7 +13,6 @@ class AppRoutes {
 
   // Pantallas a pantalla completa (sin barra inferior)
   static const diagnose = '/diagnose';
-  static const recommendations = '/recommendations';
   static const notifications = '/notifications';
   static const help = '/help';
 
