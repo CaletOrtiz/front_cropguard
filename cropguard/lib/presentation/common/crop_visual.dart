@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:cropguard/core/constants/app_colors.dart';
-import 'package:cropguard/core/constants/app_crop_visuals.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/core/constants/app_crop_visuals.dart';
 
 /// Representación visual genérica de un cultivo: gradiente + ícono.
 /// Reemplaza a una fotografía mientras no se agreguen imágenes reales.

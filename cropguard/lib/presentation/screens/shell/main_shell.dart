@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cropguard/presentation/screens/shell/widgets/floating_nav_bar.dart';
+import 'package:kroppi/presentation/screens/shell/widgets/floating_nav_bar.dart';
 
 class MainShell extends StatelessWidget {
   const MainShell({super.key, required this.navigationShell});

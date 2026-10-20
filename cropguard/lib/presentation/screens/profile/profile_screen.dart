@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cropguard/core/constants/app_colors.dart';
-import 'package:cropguard/core/constants/app_strings.dart';
-import 'package:cropguard/navigation/app_routes.dart';
-import 'package:cropguard/presentation/screens/profile/widgets/profile_menu_tile.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/core/constants/app_strings.dart';
+import 'package:kroppi/navigation/app_routes.dart';
+import 'package:kroppi/presentation/screens/profile/widgets/profile_menu_tile.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});

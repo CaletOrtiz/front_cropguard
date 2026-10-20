@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:cropguard/core/constants/app_colors.dart';
-import 'package:cropguard/core/constants/app_strings.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/core/constants/app_strings.dart';
 
 class QuickAccessHeader extends StatelessWidget {
   const QuickAccessHeader({super.key, this.onSeeAll});

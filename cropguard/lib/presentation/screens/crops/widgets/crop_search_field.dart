@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:cropguard/core/constants/app_colors.dart';
-import 'package:cropguard/core/constants/app_strings.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/core/constants/app_strings.dart';
 
 /// Buscador de la guía de cultivos: píldora con fondo verde suave,
 /// lupa a la izquierda y botón para borrar cuando hay texto.

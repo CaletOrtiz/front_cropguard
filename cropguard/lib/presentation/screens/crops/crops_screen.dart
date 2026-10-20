@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cropguard/core/constants/app_colors.dart';
-import 'package:cropguard/core/constants/app_strings.dart';
-import 'package:cropguard/core/models/crop.dart';
-import 'package:cropguard/navigation/app_routes.dart';
-import 'package:cropguard/presentation/screens/crops/widgets/crop_card.dart';
-import 'package:cropguard/presentation/screens/crops/widgets/crop_search_field.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/core/constants/app_strings.dart';
+import 'package:kroppi/core/models/crop.dart';
+import 'package:kroppi/navigation/app_routes.dart';
+import 'package:kroppi/presentation/screens/crops/widgets/crop_card.dart';
+import 'package:kroppi/presentation/screens/crops/widgets/crop_search_field.dart';
 
 class CropsScreen extends StatefulWidget {
   const CropsScreen({super.key});

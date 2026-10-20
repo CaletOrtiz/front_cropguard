@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cropguard/core/constants/app_strings.dart';
-import 'package:cropguard/core/utils/validators.dart';
-import 'package:cropguard/navigation/app_routes.dart';
-import 'package:cropguard/presentation/screens/auth/widgets/auth_input_field.dart';
-import 'package:cropguard/presentation/screens/auth/widgets/auth_screen_layout.dart';
+import 'package:kroppi/core/constants/app_strings.dart';
+import 'package:kroppi/core/utils/validators.dart';
+import 'package:kroppi/navigation/app_routes.dart';
+import 'package:kroppi/presentation/screens/auth/widgets/auth_input_field.dart';
+import 'package:kroppi/presentation/screens/auth/widgets/auth_screen_layout.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});

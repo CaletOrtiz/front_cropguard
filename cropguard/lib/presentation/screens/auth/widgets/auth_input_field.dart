@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cropguard/core/constants/app_colors.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
 
 /// Campo de texto del diseño de autenticación: etiqueta arriba,
 /// fondo verde suave, ícono a la izquierda y ojo para contraseñas.

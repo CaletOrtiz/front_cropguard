@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cropguard/core/constants/app_colors.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
 
 /// Paleta de cada tarjeta de acceso rápido.
 enum QuickAccessTone { mint, lime, sun, sky }

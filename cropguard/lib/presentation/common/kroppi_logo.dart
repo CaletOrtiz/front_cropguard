@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cropguard/core/constants/app_colors.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
 
 /// Solo la marca: hoja + barra (la "i" de Kroppi), sin el resto del texto.
 class KroppiMark extends StatelessWidget {

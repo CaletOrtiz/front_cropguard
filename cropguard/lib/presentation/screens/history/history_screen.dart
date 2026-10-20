@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:cropguard/core/constants/app_colors.dart';
-import 'package:cropguard/core/constants/app_strings.dart';
-import 'package:cropguard/core/models/diagnosis_record.dart';
-import 'package:cropguard/presentation/common/app_search_bar.dart';
-import 'package:cropguard/presentation/common/empty_state.dart';
-import 'package:cropguard/presentation/common/filter_chip_button.dart';
-import 'package:cropguard/presentation/screens/history/widgets/diagnosis_history_card.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/core/constants/app_strings.dart';
+import 'package:kroppi/core/models/diagnosis_record.dart';
+import 'package:kroppi/presentation/common/app_search_bar.dart';
+import 'package:kroppi/presentation/common/empty_state.dart';
+import 'package:kroppi/presentation/common/filter_chip_button.dart';
+import 'package:kroppi/presentation/screens/history/widgets/diagnosis_history_card.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cropguard/navigation/app_routes.dart';
+import 'package:kroppi/navigation/app_routes.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:cropguard/core/constants/app_colors.dart';
-import 'package:cropguard/core/constants/app_crop_visuals.dart';
-import 'package:cropguard/core/models/crop.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/core/constants/app_crop_visuals.dart';
+import 'package:kroppi/core/models/crop.dart';
 
 /// Tarjeta vertical de un cultivo: foto arriba, insignia circular con el
 /// ícono del cultivo, nombre, enfermedades comunes y flecha.

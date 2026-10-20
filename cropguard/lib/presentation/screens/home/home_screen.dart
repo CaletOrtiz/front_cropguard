@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cropguard/core/constants/app_colors.dart';
-import 'package:cropguard/core/constants/app_strings.dart';
-import 'package:cropguard/navigation/app_routes.dart';
-import 'package:cropguard/presentation/screens/auth/widgets/diagnose_card.dart';
-import 'package:cropguard/presentation/screens/home/widgets/quick_access_tile.dart';
-import 'package:cropguard/presentation/screens/home/widgets/quick_access_header.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/core/constants/app_strings.dart';
+import 'package:kroppi/navigation/app_routes.dart';
+import 'package:kroppi/presentation/screens/auth/widgets/diagnose_card.dart';
+import 'package:kroppi/presentation/screens/home/widgets/quick_access_tile.dart';
+import 'package:kroppi/presentation/screens/home/widgets/quick_access_header.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
