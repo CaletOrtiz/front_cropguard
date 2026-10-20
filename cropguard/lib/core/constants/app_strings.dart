@@ -45,7 +45,6 @@ class AppStrings {
   static const quickAccess = 'Accesos rápidos';
   static const myDiagnoses = 'Mis diagnósticos';
   static const cropGuide = 'Guía de cultivos';
-  static const recommendations = 'Recomendaciones';
   static const profile = 'Perfil';
 
   // Diagnóstico
@@ -76,8 +75,6 @@ class AppStrings {
 
   // Recomendaciones
   static const recommendationsTitle = 'Recomendaciones';
-  static const recommendationsSubtitle =
-      'Prácticas de manejo y prevención para tu cultivo.';
 
   // Perfil
   static const profileTitle = 'Perfil';
@@ -99,7 +96,6 @@ class AppStrings {
   static const seeAll = 'Ver todos';
   static const myDiagnosesHint = 'Revisa tus análisis anteriores';
   static const cropGuideHint = 'Aprende sobre tus cultivos';
-  static const recommendationsHint = 'Consejos personalizados para tu cultivo';
   static const profileHint = 'Gestiona tu cuenta y datos';
 
   static const searchCropHint = 'Buscar cultivo...';

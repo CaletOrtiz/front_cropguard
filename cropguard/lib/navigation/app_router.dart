@@ -11,7 +11,6 @@ import 'package:cropguard/presentation/screens/shell/main_shell.dart';
 import 'package:cropguard/presentation/screens/history/history_screen.dart';
 import 'package:cropguard/presentation/screens/crops/crops_screen.dart';
 import 'package:cropguard/presentation/screens/crops/crop_detail_screen.dart';
-import 'package:cropguard/presentation/screens/recommendations/recommendations_screen.dart';
 import 'package:cropguard/presentation/screens/profile/profile_screen.dart';
 import 'package:cropguard/presentation/screens/history/diagnosis_detail_screen.dart';
 
@@ -105,10 +104,6 @@ class AppRouter {
             child: DiagnosisScreen(userId: userId),
           );
         },
-      ),
-      GoRoute(
-        path: AppRoutes.recommendations,
-        builder: (context, state) => const RecommendationsScreen(),
       ),
       GoRoute(
         path: AppRoutes.notifications,

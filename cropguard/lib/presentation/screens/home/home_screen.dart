@@ -70,13 +70,7 @@ class HomeScreen extends StatelessWidget {
               // Para mostrar el enlace "Ver todos >", pasa onSeeAll: () {...}
               const QuickAccessHeader(),
               const SizedBox(height: 12),
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 1.1,
+              Column(
                 children: [
                   QuickAccessTile(
                     icon: Icons.history_rounded,
@@ -85,6 +79,7 @@ class HomeScreen extends StatelessWidget {
                     tone: QuickAccessTone.mint,
                     onTap: () => context.go(AppRoutes.history),
                   ),
+                  const SizedBox(height: 12),
                   QuickAccessTile(
                     icon: Icons.grass_rounded,
                     label: AppStrings.cropGuide,
@@ -92,13 +87,7 @@ class HomeScreen extends StatelessWidget {
                     tone: QuickAccessTone.lime,
                     onTap: () => context.go(AppRoutes.crops),
                   ),
-                  QuickAccessTile(
-                    icon: Icons.lightbulb_outline_rounded,
-                    label: AppStrings.recommendations,
-                    subtitle: AppStrings.recommendationsHint,
-                    tone: QuickAccessTone.sun,
-                    onTap: () => context.push(AppRoutes.recommendations),
-                  ),
+                  const SizedBox(height: 12),
                   QuickAccessTile(
                     icon: Icons.person_outline_rounded,
                     label: AppStrings.profile,
