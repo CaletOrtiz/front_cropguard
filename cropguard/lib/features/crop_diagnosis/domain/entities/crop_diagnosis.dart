@@ -2,7 +2,7 @@ import 'package:equatable/equatable.dart';
 
 class CropDiagnosis extends Equatable {
   final String id;
-  final String user_id;
+  final String userId;
   final String imageUrl;
   final String diseaseName;
   final double confidence;
@@ -11,7 +11,7 @@ class CropDiagnosis extends Equatable {
 
   const CropDiagnosis({
     required this.id,
-    required this.user_id,
+    required this.userId,
     required this.imageUrl,
     required this.diseaseName,
     required this.confidence,
@@ -22,6 +22,7 @@ class CropDiagnosis extends Equatable {
   @override
   List<Object?> get props => [
     id,
+    userId,
     imageUrl,
     diseaseName,
     confidence,

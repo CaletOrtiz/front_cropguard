@@ -1,5 +1,3 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_remote_data_source.dart';
 
@@ -9,7 +7,12 @@ class AuthRepositoryImpl implements AuthRepository {
   final AuthRemoteDataSource _remoteDataSource;
 
   @override
-  Future<AuthResponse> signInWithGoogle() {
+  Future<void> signInWithGoogle() {
     return _remoteDataSource.signInWithGoogle();
+  }
+
+  @override
+  Future<void> signOut() {
+    return _remoteDataSource.signOut();
   }
 }

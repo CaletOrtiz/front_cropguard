@@ -1,5 +1,5 @@
 name: kroppi
-description: "A new Flutter project."
+description: "Aplicación Flutter para diagnóstico de cultivos."
 publish_to: "none"
 version: 0.1.0+1
 
@@ -28,4 +28,3 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
-    - assets/images/crops/

@@ -3,7 +3,7 @@ import '../../domain/repositories/crop_diagnosis_repository.dart';
 import 'dart:io';
 import 'package:dio/dio.dart';
 
-import '../model/crop_diagnosis_model.dart';
+import '../models/crop_diagnosis_model.dart';
 
 class CropDiagnosisRepositoryImpl implements CropDiagnosisRepository {
   final Dio dioClient;

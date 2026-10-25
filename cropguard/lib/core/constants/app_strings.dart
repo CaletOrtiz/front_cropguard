@@ -84,7 +84,7 @@ class AppStrings {
   static const logout = 'Cerrar sesión';
   static const logoutConfirmTitle = '¿Cerrar sesión?';
   static const logoutConfirmMessage =
-      'Tendrás que iniciar sesión de nuevo para usar CropGuard.';
+      'Tendrás que iniciar sesión de nuevo para usar Kroppi.';
   static const cancel = 'Cancelar';
 
   // Resultado / detalle de diagnóstico

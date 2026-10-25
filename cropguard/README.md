@@ -1,4 +1,4 @@
-# CropGuard
+# Kroppi
 
 Aplicación Flutter para diagnóstico de cultivos.
 
@@ -20,7 +20,7 @@ probarlo:
 3. En Supabase, habilita **Authentication → Sign In / Providers → Google** y
    configura las credenciales OAuth de Google.
 4. El ID de cliente web se configura como valor predeterminado en
-   `lib/core/network/supabase/supabase_auth_service.dart`. Puedes reemplazarlo
+   `lib/features/auth/data/datasources/supabase_auth_service.dart`. Puedes reemplazarlo
    con un valor de compilación si necesitas distintos proyectos:
 
    ```bash
@@ -37,7 +37,7 @@ inicio.
 
 - **Flutter:** desarrollo de la interfaz móvil.
 - **Dart:** lenguaje de programación.
-- **flutter_bloc:** gestión del estado de la funcionalidad de diagnóstico.
+- **flutter_bloc:** gestión del estado de autenticación y diagnóstico.
 - **GoRouter:** navegación entre pantallas.
 - **Dio:** comunicación HTTP con el backend.
 - **image_picker:** selección de imágenes.
@@ -46,14 +46,22 @@ inicio.
 
 ## Estructura del proyecto
 
-El código fuente se encuentra en `cropguard/lib/` y está organizado de la siguiente manera:
+El código fuente se encuentra en `cropguard/lib/` y sigue una arquitectura
+feature-first. Cada funcionalidad mantiene sus capas de datos, dominio y
+presentación dentro de su propio módulo:
 
-- `core/`: constantes, modelos y utilidades compartidas.
-- `features/crop_diagnosis/`: funcionalidad de diagnóstico, organizada en datos, dominio y presentación.
-- `navigation/`: configuración de rutas y navegación.
-- `presentation/common/`: componentes reutilizables de interfaz.
-- `presentation/screens/`: pantallas de autenticación, inicio, cultivos, historial, perfil y recomendaciones.
-- `presentation/themes/`: configuración del tema visual.
+- `features/auth/`: autenticación, repositorio, casos de uso y `AuthBloc`.
+- `features/crop_diagnosis/`: análisis de imágenes y `DiagnosisBloc`.
+- `features/crops/`, `features/history/`, `features/home/` y `features/profile/`:
+  pantallas, componentes y modelos pertenecientes a cada funcionalidad.
+- `core/`: componentes visuales, tema, constantes, utilidades e integraciones
+  compartidas.
+- `navigation/`: rutas y estructura de navegación de la aplicación.
+- `app.dart`: composición de dependencias y proveedores globales de BLoC.
+
+Los componentes de interfaz conservan su estado local cuando se trata de
+interacciones visuales; BLoC gestiona los flujos de negocio y las operaciones
+asíncronas, como autenticación y diagnóstico.
 
 ## Arquitectura del diagnóstico
 

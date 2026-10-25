@@ -1,13 +1,15 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
-
-import '../../../../core/network/supabase/supabase_auth_service.dart';
+import 'package:kroppi/features/auth/data/datasources/supabase_auth_service.dart';
 
 class AuthRemoteDataSource {
   const AuthRemoteDataSource(this._authService);
 
   final SupabaseAuthService _authService;
 
-  Future<AuthResponse> signInWithGoogle() {
-    return _authService.signInWithGoogle();
+  Future<void> signInWithGoogle() async {
+    await _authService.signInWithGoogle();
+  }
+
+  Future<void> signOut() {
+    return _authService.signOut();
   }
 }
