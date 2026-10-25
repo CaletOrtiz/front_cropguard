@@ -3,11 +3,14 @@ import 'package:go_router/go_router.dart';
 import 'package:kroppi/core/constants/app_strings.dart';
 import 'package:kroppi/core/utils/validators.dart';
 import 'package:kroppi/navigation/app_routes.dart';
+import 'package:kroppi/features/auth/domain/usescases/sign_in_with_google_usecase.dart';
 import 'package:kroppi/presentation/screens/auth/widgets/auth_input_field.dart';
 import 'package:kroppi/presentation/screens/auth/widgets/auth_screen_layout.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, required this.signInWithGoogle});
+
+  final SignInWithGoogleUsecase signInWithGoogle;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -17,6 +20,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _isGoogleSignInLoading = false;
 
   @override
   void dispose() {
@@ -30,6 +34,23 @@ class _LoginScreenState extends State<LoginScreen> {
     // TODO: conectar con el servicio de autenticación
     // (_emailController.text.trim(), _passwordController.text)
     context.go(AppRoutes.home);
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() => _isGoogleSignInLoading = true);
+    try {
+      await widget.signInWithGoogle();
+      if (mounted) context.go(AppRoutes.home);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('No se pudo iniciar sesión: $error')),
+        );
+    } finally {
+      if (mounted) setState(() => _isGoogleSignInLoading = false);
+    }
   }
 
   @override
@@ -62,9 +83,8 @@ class _LoginScreenState extends State<LoginScreen> {
       switchPrompt: AppStrings.noAccount,
       switchActionLabel: AppStrings.signUpLink,
       onSwitchPressed: () => context.go(AppRoutes.register),
-      onGooglePressed: () {
-        // TODO: autenticación con Google
-      },
+      onGooglePressed: _isGoogleSignInLoading ? null : _signInWithGoogle,
+      isGoogleLoading: _isGoogleSignInLoading,
       // Sin botón de volver: el login es la puerta de entrada tras el splash.
     );
   }

@@ -23,6 +23,7 @@ class AuthScreenLayout extends StatelessWidget {
     required this.switchActionLabel,
     required this.onSwitchPressed,
     this.onGooglePressed,
+    this.isGoogleLoading = false,
     this.onBack,
   });
 
@@ -41,6 +42,7 @@ class AuthScreenLayout extends StatelessWidget {
   final VoidCallback onSwitchPressed;
 
   final VoidCallback? onGooglePressed;
+  final bool isGoogleLoading;
 
   /// Si es null, no se muestra el botón de volver.
   final VoidCallback? onBack;
@@ -137,6 +139,7 @@ class AuthScreenLayout extends StatelessWidget {
             GoogleAuthButton(
               label: AppStrings.continueGoogle,
               onPressed: onGooglePressed,
+              isLoading: isGoogleLoading,
             ),
           ],
         ),
