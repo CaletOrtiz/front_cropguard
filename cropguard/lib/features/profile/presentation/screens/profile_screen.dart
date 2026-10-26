@@ -6,15 +6,12 @@ import 'package:kroppi/core/constants/app_strings.dart';
 import 'package:kroppi/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:kroppi/features/auth/presentation/bloc/auth_event.dart';
 import 'package:kroppi/features/auth/presentation/bloc/auth_state.dart';
-import 'package:kroppi/navigation/app_routes.dart';
+import 'package:kroppi/features/profile/presentation/bloc/profile_cubit.dart';
 import 'package:kroppi/features/profile/presentation/widgets/profile_menu_tile.dart';
+import 'package:kroppi/navigation/app_routes.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
-
-  // TODO: reemplazar por los datos reales del usuario autenticado
-  static const _name = 'Agricultor';
-  static const _email = 'agricultor@correo.com';
 
   Future<void> _confirmLogout(BuildContext context) async {
     final confirmed = await showDialog<bool>(
@@ -62,40 +59,7 @@ class ProfileScreen extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
             children: [
-              Center(
-                child: Column(
-                  children: [
-                    Container(
-                      width: 88,
-                      height: 88,
-                      decoration: const BoxDecoration(
-                        color: AppColors.primaryLight,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.person_rounded,
-                        size: 44,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      _name,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      _email,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              const _ProfileHeader(),
               const SizedBox(height: 28),
               ProfileMenuTile(
                 icon: Icons.grass_rounded,
@@ -125,6 +89,85 @@ class ProfileScreen extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ProfileHeader extends StatelessWidget {
+  const _ProfileHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<ProfileCubit, ProfileState>(
+      builder: (context, state) {
+        if (state is ProfileLoading || state is ProfileInitial) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (state case ProfileLoaded(:final profile)) {
+          final name = profile.fullName.trim().isEmpty
+              ? 'Usuario'
+              : profile.fullName;
+          final email = profile.email ?? 'Correo no disponible';
+
+          return Center(
+            child: Column(
+              children: [
+                Container(
+                  width: 88,
+                  height: 88,
+                  decoration: const BoxDecoration(
+                    color: AppColors.primaryLight,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.person_rounded,
+                    size: 44,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  email,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (state case ProfileError(:final message)) {
+          return Center(
+            child: Column(
+              children: [
+                const Icon(Icons.error_outline, color: AppColors.error),
+                const SizedBox(height: 8),
+                Text(
+                  'No se pudo cargar el perfil: $message',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.error),
+                ),
+                TextButton(
+                  onPressed: () => context.read<ProfileCubit>().load(),
+                  child: const Text('Reintentar'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return const SizedBox.shrink();
+      },
     );
   }
 }

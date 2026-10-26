@@ -1,5 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:kroppi/core/network/supabase/supabase_client.dart'
+    as app_supabase;
 import 'package:kroppi/navigation/app_routes.dart';
 import 'package:kroppi/core/widgets/placeholder_screen.dart';
 import 'package:kroppi/features/auth/presentation/screens/splash/splash_screen.dart';
@@ -11,6 +13,10 @@ import 'package:kroppi/features/history/presentation/screens/history_screen.dart
 import 'package:kroppi/features/crops/presentation/screens/crops_screen.dart';
 import 'package:kroppi/features/crops/presentation/screens/crop_detail_screen.dart';
 import 'package:kroppi/features/profile/presentation/screens/profile_screen.dart';
+import 'package:kroppi/features/profile/data/datasources/profile_remote_datasource.dart';
+import 'package:kroppi/features/profile/data/repositories/profile_repository_impl.dart';
+import 'package:kroppi/features/profile/domain/usescases/get_profile.dart';
+import 'package:kroppi/features/profile/presentation/bloc/profile_cubit.dart';
 import 'package:kroppi/features/history/presentation/screens/diagnosis_detail_screen.dart';
 import 'package:kroppi/features/crop_diagnosis/domain/usecases/analyze_crop_image_usecase.dart';
 import 'package:kroppi/features/crop_diagnosis/presentation/bloc/diagnosis_bloc.dart';
@@ -67,7 +73,18 @@ class AppRouter {
             routes: [
               GoRoute(
                 path: AppRoutes.profile,
-                builder: (context, state) => const ProfileScreen(),
+                builder: (context, state) => BlocProvider(
+                  create: (_) => ProfileCubit(
+                    GetProfile(
+                      ProfileRepositoryImpl(
+                        ProfileRemoteDataSourceImpl(
+                          app_supabase.SupabaseClient.client,
+                        ),
+                      ),
+                    ),
+                  )..load(),
+                  child: const ProfileScreen(),
+                ),
               ),
             ],
           ),
