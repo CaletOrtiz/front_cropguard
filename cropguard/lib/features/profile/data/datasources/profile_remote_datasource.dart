@@ -30,15 +30,16 @@ class ProfileRemoteDataSourceImpl implements ProfileRemoteDataSource {
         .limit(1)
         .maybeSingle();
 
-    return UserProfileModel.fromRows(
-      user ??
-          {
-            'id': authUser.id,
-            'email': authUser.email ?? metadata['email'],
-            'full_name': metadata['full_name'] ?? metadata['name'] ?? '',
-            'avatar_url': metadata['avatar_url'] ?? metadata['picture'],
-          },
-      profile,
-    );
+    final userData = {
+      ...?user,
+      'id': authUser.id,
+      'email': user?['email'] ?? authUser.email ?? metadata['email'],
+      'full_name':
+          user?['full_name'] ?? metadata['full_name'] ?? metadata['name'] ?? '',
+      'avatar_url':
+          user?['avatar_url'] ?? metadata['avatar_url'] ?? metadata['picture'],
+    };
+
+    return UserProfileModel.fromRows(userData, profile);
   }
 }

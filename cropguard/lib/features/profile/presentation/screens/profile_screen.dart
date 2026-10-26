@@ -109,6 +109,7 @@ class _ProfileHeader extends StatelessWidget {
               ? 'Usuario'
               : profile.fullName;
           final email = profile.email ?? 'Correo no disponible';
+          final avatarUrl = profile.avatarUrl?.trim();
 
           return Center(
             child: Column(
@@ -120,10 +121,17 @@ class _ProfileHeader extends StatelessWidget {
                     color: AppColors.primaryLight,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
-                    Icons.person_rounded,
-                    size: 44,
-                    color: AppColors.primary,
+                  child: ClipOval(
+                    child: avatarUrl == null || avatarUrl.isEmpty
+                        ? const _DefaultProfileAvatar()
+                        : Image.network(
+                            avatarUrl,
+                            width: 88,
+                            height: 88,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                const _DefaultProfileAvatar(),
+                          ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -168,6 +176,17 @@ class _ProfileHeader extends StatelessWidget {
 
         return const SizedBox.shrink();
       },
+    );
+  }
+}
+
+class _DefaultProfileAvatar extends StatelessWidget {
+  const _DefaultProfileAvatar();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Icon(Icons.person_rounded, size: 44, color: AppColors.primary),
     );
   }
 }
