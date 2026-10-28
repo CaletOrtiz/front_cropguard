@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kroppi/core/constants/app_strings.dart';
+import 'package:kroppi/features/auth/presentation/utils/register_options.dart';
 import 'package:kroppi/features/auth/presentation/utils/validators.dart';
 import 'package:kroppi/navigation/app_routes.dart';
 import 'package:kroppi/features/auth/presentation/bloc/auth_bloc.dart';
@@ -21,6 +22,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
+  /// Para que el spinner salga en el botón que se tocó.
+  bool _googleTapped = false;
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -28,11 +32,23 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  bool get _busy => context.read<AuthBloc>().state is AuthLoading;
+
   void _submit() {
-    if (!_formKey.currentState!.validate()) return;
-    // TODO: conectar con el servicio de autenticación
-    // (_emailController.text.trim(), _passwordController.text)
-    context.go(AppRoutes.home);
+    if (_busy || !_formKey.currentState!.validate()) return;
+    _googleTapped = false;
+    context.read<AuthBloc>().add(
+      AuthEmailSignInRequested(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      ),
+    );
+  }
+
+  void _signInWithGoogle() {
+    if (_busy) return;
+    setState(() => _googleTapped = true);
+    context.read<AuthBloc>().add(const AuthGoogleSignInRequested());
   }
 
   @override
@@ -74,17 +90,15 @@ class _LoginScreenState extends State<LoginScreen> {
               onSubmitted: (_) => _submit(),
             ),
           ],
-          submitLabel: AppStrings.login,
+          submitLabel: isLoading && !_googleTapped
+              ? RegisterOptions.loggingIn
+              : AppStrings.login,
           onSubmit: _submit,
           switchPrompt: AppStrings.noAccount,
           switchActionLabel: AppStrings.signUpLink,
           onSwitchPressed: () => context.go(AppRoutes.register),
-          onGooglePressed: isLoading
-              ? null
-              : () => context.read<AuthBloc>().add(
-                  const AuthGoogleSignInRequested(),
-                ),
-          isGoogleLoading: isLoading,
+          onGooglePressed: isLoading ? null : _signInWithGoogle,
+          isGoogleLoading: isLoading && _googleTapped,
         );
       },
     );

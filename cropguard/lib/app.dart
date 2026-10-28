@@ -8,8 +8,11 @@ import 'package:kroppi/core/theme/app_theme.dart';
 import 'package:kroppi/features/auth/data/datasources/auth_remote_data_source.dart';
 import 'package:kroppi/features/auth/data/datasources/supabase_auth_service.dart';
 import 'package:kroppi/features/auth/data/repositories/auth_repository_impl.dart';
+import 'package:kroppi/features/auth/domain/usecases/get_current_user_usecase.dart';
+import 'package:kroppi/features/auth/domain/usecases/sign_in_with_email_usecase.dart';
 import 'package:kroppi/features/auth/domain/usecases/sign_in_with_google_usecase.dart';
 import 'package:kroppi/features/auth/domain/usecases/sign_out_usecase.dart';
+import 'package:kroppi/features/auth/domain/usecases/sign_up_with_email_usecase.dart';
 import 'package:kroppi/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:kroppi/features/crop_diagnosis/data/repositories/crop_diagnosis_repository_impl.dart';
 import 'package:kroppi/features/crop_diagnosis/domain/usecases/analyze_crop_image_usecase.dart';
@@ -36,6 +39,9 @@ class KroppiApp extends StatelessWidget {
       child: BlocProvider(
         create: (context) => AuthBloc(
           signInWithGoogle: SignInWithGoogleUsecase(authRepository),
+          signInWithEmail: SignInWithEmailUsecase(authRepository),
+          signUpWithEmail: SignUpWithEmailUsecase(authRepository),
+          getCurrentUser: GetCurrentUserUsecase(authRepository),
           signOut: SignOutUsecase(authRepository),
         ),
         child: MaterialApp.router(

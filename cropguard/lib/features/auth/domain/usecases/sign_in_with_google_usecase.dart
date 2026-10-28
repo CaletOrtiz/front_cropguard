@@ -1,3 +1,4 @@
+import '../entities/app_user.dart';
 import '../repositories/auth_repository.dart';
 
 class SignInWithGoogleUsecase {
@@ -5,7 +6,7 @@ class SignInWithGoogleUsecase {
 
   final AuthRepository _repository;
 
-  Future<void> call() {
+  Future<AppUser> call() {
     return _repository.signInWithGoogle();
   }
 }

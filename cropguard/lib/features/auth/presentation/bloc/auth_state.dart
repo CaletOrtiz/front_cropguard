@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:kroppi/features/auth/domain/entities/app_user.dart';
 
 sealed class AuthState extends Equatable {
   const AuthState();
@@ -16,7 +17,23 @@ final class AuthLoading extends AuthState {
 }
 
 final class AuthAuthenticated extends AuthState {
-  const AuthAuthenticated();
+  const AuthAuthenticated({required this.user});
+
+  final AppUser user;
+
+  @override
+  List<Object?> get props => [user];
+}
+
+/// El registro se hizo, pero Supabase espera que el usuario confirme el
+/// correo antes de poder iniciar sesión.
+final class AuthSignUpConfirmationRequired extends AuthState {
+  const AuthSignUpConfirmationRequired(this.email);
+
+  final String email;
+
+  @override
+  List<Object?> get props => [email];
 }
 
 final class AuthUnauthenticated extends AuthState {

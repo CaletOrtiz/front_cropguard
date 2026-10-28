@@ -12,10 +12,6 @@ import 'package:kroppi/features/profile/presentation/widgets/profile_menu_tile.d
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
-  // TODO: reemplazar por los datos reales del usuario autenticado
-  static const _name = 'Agricultor';
-  static const _email = 'agricultor@correo.com';
-
   Future<void> _confirmLogout(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -62,39 +58,73 @@ class ProfileScreen extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
             children: [
-              Center(
-                child: Column(
-                  children: [
-                    Container(
-                      width: 88,
-                      height: 88,
-                      decoration: const BoxDecoration(
-                        color: AppColors.primaryLight,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.person_rounded,
-                        size: 44,
-                        color: AppColors.primary,
-                      ),
+              // Solo se reconstruye con AuthAuthenticated, así el nombre no
+              // parpadea mientras se cierra la sesión (AuthLoading).
+              BlocBuilder<AuthBloc, AuthState>(
+                buildWhen: (_, current) => current is AuthAuthenticated,
+                builder: (context, state) {
+                  final user = state is AuthAuthenticated ? state.user : null;
+                  final name = user?.fullName ?? 'Agricultor';
+                  final email = user?.email ?? '';
+
+                  return Center(
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 88,
+                          height: 88,
+                          decoration: const BoxDecoration(
+                            color: AppColors.primaryLight,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.person_rounded,
+                            size: 44,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          name,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (email.isNotEmpty)
+                          Text(
+                            email,
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 13,
+                            ),
+                          ),
+                        if (user != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            [
+                              user.roleLabel,
+                              user.locationLabel,
+                            ].whereType<String>().join(' · '),
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 13,
+                            ),
+                          ),
+                          if (user.phoneNumber != null)
+                            Text(
+                              user.phoneNumber!,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 13,
+                              ),
+                            ),
+                        ],
+                      ],
                     ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      _name,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      _email,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
               const SizedBox(height: 28),
               ProfileMenuTile(
