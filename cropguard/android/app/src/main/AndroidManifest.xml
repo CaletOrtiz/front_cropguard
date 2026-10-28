@@ -10,6 +10,8 @@
     <!-- Para Android 13 en adelante (API 33+) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
 
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
         android:label="Kroppi"
         android:name="${applicationName}"

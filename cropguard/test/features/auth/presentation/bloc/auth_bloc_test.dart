@@ -173,6 +173,30 @@ void main() {
       await bloc.close();
     });
 
+    test('replaces the session user when the profile is updated', () async {
+      final bloc = _createBloc();
+      const updated = AppUser(
+        id: 'user-1',
+        email: 'agricultor@correo.com',
+        fullName: 'Agricultor Prueba',
+        role: 'AGRONOMIST',
+        municipality: 'Codazzi',
+        department: 'Cesar',
+        phoneNumber: '3001234567',
+      );
+      final expectedStates = expectLater(
+        bloc.stream,
+        emitsInOrder([
+          isA<AuthAuthenticated>().having((s) => s.user, 'user', updated),
+        ]),
+      );
+
+      bloc.add(const AuthUserUpdated(updated));
+
+      await expectedStates;
+      await bloc.close();
+    });
+
     test('emits unauthenticated after sign-out succeeds', () async {
       final bloc = _createBloc();
       final expectedStates = expectLater(

@@ -7,7 +7,9 @@ import 'package:kroppi/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:kroppi/features/auth/presentation/bloc/auth_event.dart';
 import 'package:kroppi/features/auth/presentation/bloc/auth_state.dart';
 import 'package:kroppi/navigation/app_routes.dart';
+import 'package:kroppi/features/profile/presentation/utils/profile_strings.dart';
 import 'package:kroppi/features/profile/presentation/widgets/profile_menu_tile.dart';
+import 'package:kroppi/features/profile/presentation/widgets/user_avatar.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -70,19 +72,7 @@ class ProfileScreen extends StatelessWidget {
                   return Center(
                     child: Column(
                       children: [
-                        Container(
-                          width: 88,
-                          height: 88,
-                          decoration: const BoxDecoration(
-                            color: AppColors.primaryLight,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.person_rounded,
-                            size: 44,
-                            color: AppColors.primary,
-                          ),
-                        ),
+                        UserAvatar(imageUrl: user?.avatarUrl),
                         const SizedBox(height: 12),
                         Text(
                           name,
@@ -127,6 +117,12 @@ class ProfileScreen extends StatelessWidget {
                 },
               ),
               const SizedBox(height: 28),
+              ProfileMenuTile(
+                icon: Icons.person_outline_rounded,
+                label: ProfileStrings.personalData,
+                onTap: () => context.push(AppRoutes.personalData),
+              ),
+              const SizedBox(height: 10),
               ProfileMenuTile(
                 icon: Icons.grass_rounded,
                 label: AppStrings.myCrops,

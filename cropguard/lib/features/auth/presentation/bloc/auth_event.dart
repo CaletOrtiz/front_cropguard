@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:kroppi/features/auth/domain/entities/app_user.dart';
 import 'package:kroppi/features/auth/domain/entities/sign_up_params.dart';
 
 sealed class AuthEvent extends Equatable {
@@ -41,4 +42,15 @@ final class AuthEmailSignUpRequested extends AuthEvent {
 
 final class AuthSignOutRequested extends AuthEvent {
   const AuthSignOutRequested();
+}
+
+/// El perfil cambió (por ejemplo, se editaron los datos personales): se
+/// reemplaza el usuario de la sesión sin volver a iniciar sesión.
+final class AuthUserUpdated extends AuthEvent {
+  const AuthUserUpdated(this.user);
+
+  final AppUser user;
+
+  @override
+  List<Object?> get props => [user];
 }

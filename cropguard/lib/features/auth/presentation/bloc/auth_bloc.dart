@@ -21,6 +21,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthEmailSignInRequested>(_onEmailSignInRequested);
     on<AuthEmailSignUpRequested>(_onEmailSignUpRequested);
     on<AuthSignOutRequested>(_onSignOutRequested);
+    on<AuthUserUpdated>(_onUserUpdated);
   }
 
   final SignInWithGoogleUsecase signInWithGoogle;
@@ -28,6 +29,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final SignUpWithEmailUsecase signUpWithEmail;
   final GetCurrentUserUsecase getCurrentUser;
   final SignOutUsecase signOut;
+
+  void _onUserUpdated(AuthUserUpdated event, Emitter<AuthState> emit) {
+    emit(AuthAuthenticated(user: event.user));
+  }
 
   Future<void> _onSessionCheckRequested(
     AuthSessionCheckRequested event,

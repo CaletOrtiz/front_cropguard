@@ -150,6 +150,7 @@ lib/
       app_strings.dart
     errors/
       failures.dart
+      guard.dart
     network/
       supabase/
         supabase_client.dart
@@ -177,14 +178,22 @@ lib/
         datasources/
           auth_remote_data_source.dart
           supabase_auth_service.dart
+        models/
+          app_user_model.dart
         repositories/
           auth_repository_impl.dart
       domain/
+        entities/
+          app_user.dart
+          sign_up_params.dart
         repositories/
           auth_repository.dart
         usecases/
+          get_current_user_usecase.dart
+          sign_in_with_email_usecase.dart
           sign_in_with_google_usecase.dart
           sign_out_usecase.dart
+          sign_up_with_email_usecase.dart
       presentation/
         bloc/
           auth_bloc.dart
@@ -196,10 +205,12 @@ lib/
           login_screen.dart
           register_screen.dart
         utils/
+          register_options.dart
           validators.dart
         widgets/
           auth_background.dart
           auth_buttons.dart
+          auth_dropdown_field.dart
           auth_header.dart
           auth_input_field.dart
           auth_screen_layout.dart
@@ -2120,10 +2131,17 @@ class AppStrings {
 </file>
 
 <file path="lib/core/errors/failures.dart">
-// core/error/failures.dart
-abstract class Failure {
+/// Errores de dominio que viajan desde la capa data hasta los bloc/cubit.
+///
+/// Implementan [Exception] y su toString() devuelve el mensaje, así que
+/// `error.toString()` ya es un texto apto para mostrar al usuario.
+abstract class Failure implements Exception {
   const Failure(this.message);
+
   final String message;
+
+  @override
+  String toString() => message;
 }
 
 class AuthFailure extends Failure {
@@ -2134,8 +2152,79 @@ class CancelledFailure extends Failure {
   const CancelledFailure() : super('Inicio de sesión cancelado');
 }
 
+class NetworkFailure extends Failure {
+  const NetworkFailure()
+    : super('Sin conexión. Revisa tu internet e inténtalo de nuevo.');
+}
+
+class ServerFailure extends Failure {
+  const ServerFailure(super.message);
+}
+
+class NotFoundFailure extends Failure {
+  const NotFoundFailure(super.message);
+}
+
 class UnknownFailure extends Failure {
   const UnknownFailure(super.message);
+}
+</file>
+
+<file path="lib/core/errors/guard.dart">
+import 'dart:io';
+
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'failures.dart';
+
+/// Ejecuta una operación de la capa data y traduce cualquier excepción
+/// (Supabase Auth, Postgrest, Storage, red) a un [Failure] con mensaje en
+/// español. Los repositorios envuelven sus llamadas con esta función.
+Future<T> guardCall<T>(Future<T> Function() run) async {
+  try {
+    return await run();
+  } on Failure {
+    rethrow;
+  } on AuthRetryableFetchException {
+    throw const NetworkFailure();
+  } on AuthException catch (e) {
+    throw AuthFailure(_authMessage(e.message));
+  } on PostgrestException catch (e) {
+    throw ServerFailure(_dbMessage(e));
+  } on StorageException catch (e) {
+    throw ServerFailure('No se pudo subir la imagen: ${e.message}');
+  } on SocketException {
+    throw const NetworkFailure();
+  } catch (_) {
+    throw const UnknownFailure(
+      'Ocurrió un error inesperado. Inténtalo de nuevo.',
+    );
+  }
+}
+
+String _authMessage(String raw) {
+  final m = raw.toLowerCase();
+  if (m.contains('invalid login credentials')) {
+    return 'Correo o contraseña incorrectos.';
+  }
+  if (m.contains('email not confirmed')) {
+    return 'Confirma tu correo antes de iniciar sesión.';
+  }
+  if (m.contains('already registered') || m.contains('already been registered')) {
+    return 'Este correo ya tiene una cuenta.';
+  }
+  if (m.contains('password should be') || m.contains('weak password')) {
+    return 'La contraseña es muy débil (mínimo 6 caracteres).';
+  }
+  if (m.contains('rate limit') || m.contains('too many')) {
+    return 'Demasiados intentos. Espera un momento e inténtalo de nuevo.';
+  }
+  return raw;
+}
+
+String _dbMessage(PostgrestException e) {
+  if (e.code == '42501') return 'No tienes permiso para realizar esta acción.';
+  return e.message;
 }
 </file>
 
@@ -3173,19 +3262,86 @@ class SocialButton extends StatelessWidget {
 </file>
 
 <file path="lib/features/auth/data/datasources/auth_remote_data_source.dart">
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'package:kroppi/core/errors/failures.dart';
 import 'package:kroppi/features/auth/data/datasources/supabase_auth_service.dart';
+import 'package:kroppi/features/auth/data/models/app_user_model.dart';
+import 'package:kroppi/features/auth/domain/entities/sign_up_params.dart';
 
 class AuthRemoteDataSource {
   const AuthRemoteDataSource(this._authService);
 
   final SupabaseAuthService _authService;
 
-  Future<void> signInWithGoogle() async {
-    await _authService.signInWithGoogle();
+  Future<AppUserModel> signInWithGoogle() async {
+    final response = await _authService.signInWithGoogle();
+    final user = response.user;
+    if (user == null) {
+      throw const AuthException('No se pudo iniciar sesión con Google');
+    }
+    return _withProfile(user);
+  }
+
+  Future<AppUserModel> signInWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    final response = await _authService.signInWithEmail(
+      email: email,
+      password: password,
+    );
+    final user = response.user;
+    if (user == null) {
+      throw const AuthException('Invalid login credentials');
+    }
+    return _withProfile(user);
+  }
+
+  Future<AppUserModel?> signUpWithEmail(SignUpParams params) async {
+    final response = await _authService.signUpWithEmail(params);
+    final user = response.user;
+    if (user == null) {
+      throw const AuthException('No se pudo crear la cuenta');
+    }
+    // Con la confirmación de correo activa, Supabase no devuelve error si el
+    // correo ya existe: devuelve un usuario sin identidades.
+    if (user.identities != null && user.identities!.isEmpty) {
+      throw const AuthException('User already registered');
+    }
+    // Sin sesión = Supabase está esperando que se confirme el correo.
+    if (response.session == null) return null;
+    return _withProfile(user);
   }
 
   Future<void> signOut() {
     return _authService.signOut();
+  }
+
+  /// Sesión restaurada por el SDK + su perfil. Si la sesión existe pero el
+  /// perfil no, se cierra y se trata como "sin sesión".
+  Future<AppUserModel?> getCurrentUser() async {
+    final user = _authService.currentUser;
+    if (user == null) return null;
+    final row = await _authService.fetchProfile(user.id);
+    if (row == null) {
+      await _authService.signOut();
+      return null;
+    }
+    return AppUserModel.fromProfile(row, email: user.email ?? '');
+  }
+
+  /// Valida que el usuario tenga fila en `profiles`. Sin perfil no se
+  /// permite entrar: se cierra la sesión y se informa.
+  Future<AppUserModel> _withProfile(User user) async {
+    final row = await _authService.fetchProfile(user.id);
+    if (row == null) {
+      await _authService.signOut();
+      throw const NotFoundFailure(
+        'Tu cuenta no tiene un perfil asociado. Contacta a soporte.',
+      );
+    }
+    return AppUserModel.fromProfile(row, email: user.email ?? '');
   }
 }
 </file>
@@ -3193,6 +3349,8 @@ class AuthRemoteDataSource {
 <file path="lib/features/auth/data/datasources/supabase_auth_service.dart">
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../domain/entities/sign_up_params.dart';
 
 class SupabaseAuthService {
   SupabaseAuthService(this._client) : _googleSignIn = GoogleSignIn.instance;
@@ -3207,6 +3365,33 @@ class SupabaseAuthService {
         '302834720640-e91fk4kj1rnc3su728tccig6ogkisq7m.apps.googleusercontent.com',
   );
   static const _iosClientId = String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
+
+  // ---------------- Correo y contraseña ----------------
+
+  Future<AuthResponse> signInWithEmail({
+    required String email,
+    required String password,
+  }) {
+    return _client.auth.signInWithPassword(email: email, password: password);
+  }
+
+  /// Los datos del formulario viajan como metadata; el trigger
+  /// `handle_new_user` los copia a `profiles` (ver supabase/01_registro_perfiles.sql).
+  Future<AuthResponse> signUpWithEmail(SignUpParams params) {
+    return _client.auth.signUp(
+      email: params.email,
+      password: params.password,
+      data: {
+        'full_name': params.fullName,
+        if (params.phoneNumber != null) 'phone_number': params.phoneNumber,
+        if (params.municipality != null) 'municipality': params.municipality,
+        if (params.department != null) 'department': params.department,
+        'role': params.role,
+      },
+    );
+  }
+
+  // ---------------- Google (sin cambios) ----------------
 
   Future<AuthResponse> signInWithGoogle() async {
     if (_webClientId.isEmpty) {
@@ -3233,8 +3418,24 @@ class SupabaseAuthService {
     );
   }
 
+  // ---------------- Perfil ----------------
+
+  /// Fila de `public.profiles` del usuario, o null si no existe.
+  Future<Map<String, dynamic>?> fetchProfile(String userId) {
+    return _client.from('profiles').select().eq('id', userId).maybeSingle();
+  }
+
+  // ---------------- Sesión ----------------
+
   Future<void> signOut() async {
-    await _googleSignIn.signOut();
+    // Con google_sign_in 7.x, signOut() exige haber llamado a initialize().
+    // Quien entró con correo nunca lo hizo, así que solo cerramos Google
+    // cuando se usó en esta ejecución.
+    if (_googleSignInInitialization != null) {
+      try {
+        await _googleSignIn.signOut();
+      } catch (_) {}
+    }
     await _client.auth.signOut();
   }
 
@@ -3244,7 +3445,55 @@ class SupabaseAuthService {
 }
 </file>
 
+<file path="lib/features/auth/data/models/app_user_model.dart">
+import '../../domain/entities/app_user.dart';
+
+class AppUserModel extends AppUser {
+  const AppUserModel({
+    required super.id,
+    required super.email,
+    required super.fullName,
+    super.role,
+    super.phoneNumber,
+    super.municipality,
+    super.department,
+    super.avatarUrl,
+  });
+
+  /// [row] es una fila de `public.profiles`; el correo viene de auth.users
+  /// porque `profiles` no lo guarda.
+  factory AppUserModel.fromProfile(
+    Map<String, dynamic> row, {
+    required String email,
+  }) {
+    String? text(String key) {
+      final value = row[key]?.toString().trim();
+      return (value == null || value.isEmpty) ? null : value;
+    }
+
+    final fallbackName = email.contains('@')
+        ? email.split('@').first
+        : 'Agricultor';
+
+    return AppUserModel(
+      id: row['id'].toString(),
+      email: email,
+      fullName: text('full_name') ?? fallbackName,
+      role: text('role') ?? 'FARMER',
+      phoneNumber: text('phone_number'),
+      municipality: text('municipality'),
+      department: text('department'),
+      avatarUrl: text('avatar_url'),
+    );
+  }
+}
+</file>
+
 <file path="lib/features/auth/data/repositories/auth_repository_impl.dart">
+import 'package:kroppi/core/errors/guard.dart';
+
+import '../../domain/entities/app_user.dart';
+import '../../domain/entities/sign_up_params.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_remote_data_source.dart';
 
@@ -3253,27 +3502,205 @@ class AuthRepositoryImpl implements AuthRepository {
 
   final AuthRemoteDataSource _remoteDataSource;
 
+  /// Google se deja sin traducir de errores (como antes); solo se agrega la
+  /// validación del perfil.
   @override
-  Future<void> signInWithGoogle() {
+  Future<AppUser> signInWithGoogle() {
     return _remoteDataSource.signInWithGoogle();
   }
 
   @override
+  Future<AppUser> signInWithEmail({
+    required String email,
+    required String password,
+  }) {
+    return guardCall<AppUser>(
+      () => _remoteDataSource.signInWithEmail(
+        email: email.trim(),
+        password: password,
+      ),
+    );
+  }
+
+  @override
+  Future<AppUser?> signUpWithEmail(SignUpParams params) {
+    return guardCall<AppUser?>(
+      () => _remoteDataSource.signUpWithEmail(
+        SignUpParams(
+          fullName: params.fullName.trim(),
+          email: params.email.trim(),
+          password: params.password,
+          phoneNumber: params.phoneNumber,
+          municipality: params.municipality,
+          department: params.department,
+          role: params.role,
+        ),
+      ),
+    );
+  }
+
+  @override
   Future<void> signOut() {
-    return _remoteDataSource.signOut();
+    return guardCall(_remoteDataSource.signOut);
+  }
+
+  @override
+  Future<AppUser?> getCurrentUser() {
+    return guardCall<AppUser?>(_remoteDataSource.getCurrentUser);
   }
 }
 </file>
 
+<file path="lib/features/auth/domain/entities/app_user.dart">
+import 'package:equatable/equatable.dart';
+
+/// Usuario autenticado + los datos de su fila en `public.profiles`.
+class AppUser extends Equatable {
+  const AppUser({
+    required this.id,
+    required this.email,
+    required this.fullName,
+    this.role = 'FARMER',
+    this.phoneNumber,
+    this.municipality,
+    this.department,
+    this.avatarUrl,
+  });
+
+  final String id;
+  final String email;
+  final String fullName;
+
+  /// FARMER, AGRONOMIST o ADMIN (columna `profiles.role`).
+  final String role;
+  final String? phoneNumber;
+  final String? municipality;
+  final String? department;
+  final String? avatarUrl;
+
+  String get roleLabel => switch (role) {
+    'AGRONOMIST' => 'Agrónomo',
+    'ADMIN' => 'Administrador',
+    _ => 'Agricultor',
+  };
+
+  /// "Valledupar, Cesar", solo "Cesar", o null si no hay ubicación.
+  String? get locationLabel {
+    final parts = [
+      municipality,
+      department,
+    ].whereType<String>().where((p) => p.trim().isNotEmpty).toList();
+    return parts.isEmpty ? null : parts.join(', ');
+  }
+
+  @override
+  List<Object?> get props => [
+    id,
+    email,
+    fullName,
+    role,
+    phoneNumber,
+    municipality,
+    department,
+    avatarUrl,
+  ];
+}
+</file>
+
+<file path="lib/features/auth/domain/entities/sign_up_params.dart">
+import 'package:equatable/equatable.dart';
+
+/// Datos del formulario de registro. Todo lo que no es correo/contraseña
+/// termina en `profiles` (lo copia el trigger handle_new_user).
+class SignUpParams extends Equatable {
+  const SignUpParams({
+    required this.fullName,
+    required this.email,
+    required this.password,
+    this.phoneNumber,
+    this.municipality,
+    this.department = 'Cesar',
+    this.role = 'FARMER',
+  });
+
+  final String fullName;
+  final String email;
+  final String password;
+  final String? phoneNumber;
+  final String? municipality;
+  final String? department;
+
+  /// Solo FARMER o AGRONOMIST: el trigger ignora cualquier otro valor.
+  final String role;
+
+  @override
+  List<Object?> get props => [
+    fullName,
+    email,
+    password,
+    phoneNumber,
+    municipality,
+    department,
+    role,
+  ];
+}
+</file>
+
 <file path="lib/features/auth/domain/repositories/auth_repository.dart">
+import '../entities/app_user.dart';
+import '../entities/sign_up_params.dart';
+
 abstract interface class AuthRepository {
-  Future<void> signInWithGoogle();
+  /// Inicia sesión con Google y valida que exista el perfil del usuario.
+  Future<AppUser> signInWithGoogle();
+
+  /// Inicia sesión con correo y valida que exista el perfil del usuario.
+  Future<AppUser> signInWithEmail({
+    required String email,
+    required String password,
+  });
+
+  /// Devuelve null cuando Supabase exige confirmar el correo antes de
+  /// iniciar sesión (no hay sesión activa todavía).
+  Future<AppUser?> signUpWithEmail(SignUpParams params);
 
   Future<void> signOut();
+
+  /// Restaura la sesión guardada junto con su perfil; null si no hay.
+  Future<AppUser?> getCurrentUser();
+}
+</file>
+
+<file path="lib/features/auth/domain/usecases/get_current_user_usecase.dart">
+import '../entities/app_user.dart';
+import '../repositories/auth_repository.dart';
+
+class GetCurrentUserUsecase {
+  const GetCurrentUserUsecase(this._repository);
+
+  final AuthRepository _repository;
+
+  Future<AppUser?> call() => _repository.getCurrentUser();
+}
+</file>
+
+<file path="lib/features/auth/domain/usecases/sign_in_with_email_usecase.dart">
+import '../entities/app_user.dart';
+import '../repositories/auth_repository.dart';
+
+class SignInWithEmailUsecase {
+  const SignInWithEmailUsecase(this._repository);
+
+  final AuthRepository _repository;
+
+  Future<AppUser> call({required String email, required String password}) {
+    return _repository.signInWithEmail(email: email, password: password);
+  }
 }
 </file>
 
 <file path="lib/features/auth/domain/usecases/sign_in_with_google_usecase.dart">
+import '../entities/app_user.dart';
 import '../repositories/auth_repository.dart';
 
 class SignInWithGoogleUsecase {
@@ -3281,7 +3708,7 @@ class SignInWithGoogleUsecase {
 
   final AuthRepository _repository;
 
-  Future<void> call() {
+  Future<AppUser> call() {
     return _repository.signInWithGoogle();
   }
 }
@@ -3301,23 +3728,70 @@ class SignOutUsecase {
 }
 </file>
 
+<file path="lib/features/auth/domain/usecases/sign_up_with_email_usecase.dart">
+import '../entities/app_user.dart';
+import '../entities/sign_up_params.dart';
+import '../repositories/auth_repository.dart';
+
+class SignUpWithEmailUsecase {
+  const SignUpWithEmailUsecase(this._repository);
+
+  final AuthRepository _repository;
+
+  Future<AppUser?> call(SignUpParams params) {
+    return _repository.signUpWithEmail(params);
+  }
+}
+</file>
+
 <file path="lib/features/auth/presentation/bloc/auth_bloc.dart">
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../domain/usecases/get_current_user_usecase.dart';
+import '../../domain/usecases/sign_in_with_email_usecase.dart';
 import '../../domain/usecases/sign_in_with_google_usecase.dart';
 import '../../domain/usecases/sign_out_usecase.dart';
+import '../../domain/usecases/sign_up_with_email_usecase.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
-  AuthBloc({required this.signInWithGoogle, required this.signOut})
-    : super(const AuthInitial()) {
+  AuthBloc({
+    required this.signInWithGoogle,
+    required this.signInWithEmail,
+    required this.signUpWithEmail,
+    required this.getCurrentUser,
+    required this.signOut,
+  }) : super(const AuthInitial()) {
+    on<AuthSessionCheckRequested>(_onSessionCheckRequested);
     on<AuthGoogleSignInRequested>(_onGoogleSignInRequested);
+    on<AuthEmailSignInRequested>(_onEmailSignInRequested);
+    on<AuthEmailSignUpRequested>(_onEmailSignUpRequested);
     on<AuthSignOutRequested>(_onSignOutRequested);
   }
 
   final SignInWithGoogleUsecase signInWithGoogle;
+  final SignInWithEmailUsecase signInWithEmail;
+  final SignUpWithEmailUsecase signUpWithEmail;
+  final GetCurrentUserUsecase getCurrentUser;
   final SignOutUsecase signOut;
+
+  Future<void> _onSessionCheckRequested(
+    AuthSessionCheckRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    try {
+      final user = await getCurrentUser();
+      emit(
+        user == null
+            ? const AuthUnauthenticated()
+            : AuthAuthenticated(user: user),
+      );
+    } catch (_) {
+      // Sin red o sesión inválida: se muestra la pantalla de bienvenida.
+      emit(const AuthUnauthenticated());
+    }
+  }
 
   Future<void> _onGoogleSignInRequested(
     AuthGoogleSignInRequested event,
@@ -3325,8 +3799,41 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     emit(const AuthLoading());
     try {
-      await signInWithGoogle();
-      emit(const AuthAuthenticated());
+      final user = await signInWithGoogle();
+      emit(AuthAuthenticated(user: user));
+    } catch (error) {
+      emit(AuthFailure(error.toString()));
+    }
+  }
+
+  Future<void> _onEmailSignInRequested(
+    AuthEmailSignInRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(const AuthLoading());
+    try {
+      final user = await signInWithEmail(
+        email: event.email,
+        password: event.password,
+      );
+      emit(AuthAuthenticated(user: user));
+    } catch (error) {
+      emit(AuthFailure(error.toString()));
+    }
+  }
+
+  Future<void> _onEmailSignUpRequested(
+    AuthEmailSignUpRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(const AuthLoading());
+    try {
+      final user = await signUpWithEmail(event.params);
+      emit(
+        user == null
+            ? AuthSignUpConfirmationRequired(event.params.email.trim())
+            : AuthAuthenticated(user: user),
+      );
     } catch (error) {
       emit(AuthFailure(error.toString()));
     }
@@ -3349,6 +3856,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
 <file path="lib/features/auth/presentation/bloc/auth_event.dart">
 import 'package:equatable/equatable.dart';
+import 'package:kroppi/features/auth/domain/entities/sign_up_params.dart';
 
 sealed class AuthEvent extends Equatable {
   const AuthEvent();
@@ -3357,8 +3865,35 @@ sealed class AuthEvent extends Equatable {
   List<Object?> get props => [];
 }
 
+/// Se lanza al abrir la app para saber si ya hay una sesión guardada.
+final class AuthSessionCheckRequested extends AuthEvent {
+  const AuthSessionCheckRequested();
+}
+
 final class AuthGoogleSignInRequested extends AuthEvent {
   const AuthGoogleSignInRequested();
+}
+
+final class AuthEmailSignInRequested extends AuthEvent {
+  const AuthEmailSignInRequested({
+    required this.email,
+    required this.password,
+  });
+
+  final String email;
+  final String password;
+
+  @override
+  List<Object?> get props => [email, password];
+}
+
+final class AuthEmailSignUpRequested extends AuthEvent {
+  const AuthEmailSignUpRequested(this.params);
+
+  final SignUpParams params;
+
+  @override
+  List<Object?> get props => [params];
 }
 
 final class AuthSignOutRequested extends AuthEvent {
@@ -3368,6 +3903,7 @@ final class AuthSignOutRequested extends AuthEvent {
 
 <file path="lib/features/auth/presentation/bloc/auth_state.dart">
 import 'package:equatable/equatable.dart';
+import 'package:kroppi/features/auth/domain/entities/app_user.dart';
 
 sealed class AuthState extends Equatable {
   const AuthState();
@@ -3385,7 +3921,23 @@ final class AuthLoading extends AuthState {
 }
 
 final class AuthAuthenticated extends AuthState {
-  const AuthAuthenticated();
+  const AuthAuthenticated({required this.user});
+
+  final AppUser user;
+
+  @override
+  List<Object?> get props => [user];
+}
+
+/// El registro se hizo, pero Supabase espera que el usuario confirme el
+/// correo antes de poder iniciar sesión.
+final class AuthSignUpConfirmationRequired extends AuthState {
+  const AuthSignUpConfirmationRequired(this.email);
+
+  final String email;
+
+  @override
+  List<Object?> get props => [email];
 }
 
 final class AuthUnauthenticated extends AuthState {
@@ -3404,50 +3956,80 @@ final class AuthFailure extends AuthState {
 
 <file path="lib/features/auth/presentation/screens/splash/splash_screen.dart">
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kroppi/core/constants/app_colors.dart';
 import 'package:kroppi/core/constants/app_strings.dart';
+import 'package:kroppi/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:kroppi/features/auth/presentation/bloc/auth_event.dart';
+import 'package:kroppi/features/auth/presentation/bloc/auth_state.dart';
 import 'package:kroppi/navigation/app_routes.dart';
 import 'package:kroppi/core/widgets/kroppi_logo.dart';
 
-class SplashScreen extends StatelessWidget {
+class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
   @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Pregunta si ya hay una sesión guardada (el SDK la restaura solo).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<AuthBloc>().add(const AuthSessionCheckRequested());
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.splashBackground,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            children: [
-              const Spacer(flex: 5),
-              KroppiIntroAnimation(
-                fontSize: 48,
-                textColor: AppColors.splashOnColor,
-                leafColor: AppColors.splashOnColor,
-                slogan: AppStrings.slogan,
-                sloganStyle: TextStyle(
-                  color: AppColors.splashOnColor.withValues(alpha: 0.75),
-                  fontSize: 16,
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) async {
+        if (state is AuthAuthenticated) {
+          // Deja ver la animación de entrada antes de pasar al inicio.
+          await Future<void>.delayed(const Duration(milliseconds: 1800));
+          if (!context.mounted) return;
+          context.go(AppRoutes.home);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.splashBackground,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              children: [
+                const Spacer(flex: 5),
+                KroppiIntroAnimation(
+                  fontSize: 48,
+                  textColor: AppColors.splashOnColor,
+                  leafColor: AppColors.splashOnColor,
+                  slogan: AppStrings.slogan,
+                  sloganStyle: TextStyle(
+                    color: AppColors.splashOnColor.withValues(alpha: 0.75),
+                    fontSize: 16,
+                  ),
                 ),
-              ),
-              const Spacer(flex: 5),
-              _DarkPillButton(
-                label: AppStrings.start,
-                onPressed: () => context.go(AppRoutes.register),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                AppStrings.poweredByAi,
-                style: TextStyle(
-                  color: AppColors.splashOnColor.withValues(alpha: 0.6),
-                  fontSize: 12,
+                const Spacer(flex: 5),
+                _DarkPillButton(
+                  label: AppStrings.start,
+                  onPressed: () => context.go(AppRoutes.register),
                 ),
-              ),
-              const SizedBox(height: 16),
-            ],
+                const SizedBox(height: 12),
+                Text(
+                  AppStrings.poweredByAi,
+                  style: TextStyle(
+                    color: AppColors.splashOnColor.withValues(alpha: 0.6),
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         ),
       ),
@@ -3491,6 +4073,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kroppi/core/constants/app_strings.dart';
+import 'package:kroppi/features/auth/presentation/utils/register_options.dart';
 import 'package:kroppi/features/auth/presentation/utils/validators.dart';
 import 'package:kroppi/navigation/app_routes.dart';
 import 'package:kroppi/features/auth/presentation/bloc/auth_bloc.dart';
@@ -3510,6 +4093,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
+  /// Para que el spinner salga en el botón que se tocó.
+  bool _googleTapped = false;
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -3517,11 +4103,23 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  bool get _busy => context.read<AuthBloc>().state is AuthLoading;
+
   void _submit() {
-    if (!_formKey.currentState!.validate()) return;
-    // TODO: conectar con el servicio de autenticación
-    // (_emailController.text.trim(), _passwordController.text)
-    context.go(AppRoutes.home);
+    if (_busy || !_formKey.currentState!.validate()) return;
+    _googleTapped = false;
+    context.read<AuthBloc>().add(
+      AuthEmailSignInRequested(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      ),
+    );
+  }
+
+  void _signInWithGoogle() {
+    if (_busy) return;
+    setState(() => _googleTapped = true);
+    context.read<AuthBloc>().add(const AuthGoogleSignInRequested());
   }
 
   @override
@@ -3563,17 +4161,15 @@ class _LoginScreenState extends State<LoginScreen> {
               onSubmitted: (_) => _submit(),
             ),
           ],
-          submitLabel: AppStrings.login,
+          submitLabel: isLoading && !_googleTapped
+              ? RegisterOptions.loggingIn
+              : AppStrings.login,
           onSubmit: _submit,
           switchPrompt: AppStrings.noAccount,
           switchActionLabel: AppStrings.signUpLink,
           onSwitchPressed: () => context.go(AppRoutes.register),
-          onGooglePressed: isLoading
-              ? null
-              : () => context.read<AuthBloc>().add(
-                  const AuthGoogleSignInRequested(),
-                ),
-          isGoogleLoading: isLoading,
+          onGooglePressed: isLoading ? null : _signInWithGoogle,
+          isGoogleLoading: isLoading && _googleTapped,
         );
       },
     );
@@ -3586,11 +4182,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kroppi/core/constants/app_strings.dart';
+import 'package:kroppi/features/auth/domain/entities/sign_up_params.dart';
+import 'package:kroppi/features/auth/presentation/utils/register_options.dart';
 import 'package:kroppi/features/auth/presentation/utils/validators.dart';
 import 'package:kroppi/navigation/app_routes.dart';
 import 'package:kroppi/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:kroppi/features/auth/presentation/bloc/auth_event.dart';
 import 'package:kroppi/features/auth/presentation/bloc/auth_state.dart';
+import 'package:kroppi/features/auth/presentation/widgets/auth_dropdown_field.dart';
 import 'package:kroppi/features/auth/presentation/widgets/auth_input_field.dart';
 import 'package:kroppi/features/auth/presentation/widgets/auth_screen_layout.dart';
 
@@ -3605,21 +4204,48 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
+
+  String? _municipality;
+  String _role = RegisterOptions.roleFarmer;
+
+  /// Para que el spinner salga en el botón que se tocó.
+  bool _googleTapped = false;
 
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
+  bool get _busy => context.read<AuthBloc>().state is AuthLoading;
+
   void _submit() {
-    if (!_formKey.currentState!.validate()) return;
-    // TODO: conectar con el servicio de registro
-    // (_nameController.text.trim(), _emailController.text.trim(), password)
-    context.go(AppRoutes.home);
+    if (_busy || !_formKey.currentState!.validate()) return;
+    _googleTapped = false;
+    context.read<AuthBloc>().add(
+      AuthEmailSignUpRequested(
+        SignUpParams(
+          fullName: _nameController.text.trim(),
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+          phoneNumber: Validators.normalizePhone(_phoneController.text),
+          municipality: _municipality,
+          department: RegisterOptions.department,
+          role: _role,
+        ),
+      ),
+    );
+  }
+
+  void _signInWithGoogle() {
+    if (_busy) return;
+    setState(() => _googleTapped = true);
+    context.read<AuthBloc>().add(const AuthGoogleSignInRequested());
   }
 
   void _goBack() {
@@ -3636,6 +4262,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
       listener: (context, state) {
         if (state is AuthAuthenticated) {
           context.go(AppRoutes.home);
+        } else if (state case AuthSignUpConfirmationRequired(:final email)) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(
+                duration: const Duration(seconds: 7),
+                content: Text(
+                  'Te enviamos un correo a $email. Confírmalo y luego inicia sesión.',
+                ),
+              ),
+            );
+          context.go(AppRoutes.login);
         } else if (state case AuthFailure(:final message)) {
           ScaffoldMessenger.of(context)
             ..hideCurrentSnackBar()
@@ -3668,6 +4306,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
               textInputAction: TextInputAction.next,
             ),
             AuthInputField(
+              label: RegisterOptions.phoneLabel,
+              icon: Icons.phone_outlined,
+              controller: _phoneController,
+              validator: Validators.phone,
+              keyboardType: TextInputType.phone,
+              textInputAction: TextInputAction.next,
+            ),
+            AuthDropdownField<String>(
+              label: RegisterOptions.municipalityLabel,
+              hint: 'Selecciona tu municipio',
+              icon: Icons.location_on_outlined,
+              value: _municipality,
+              validator: Validators.municipality,
+              onChanged: (value) => setState(() => _municipality = value),
+              items: [
+                for (final name in RegisterOptions.cesarMunicipalities)
+                  DropdownMenuItem(value: name, child: Text(name)),
+              ],
+            ),
+            AuthDropdownField<String>(
+              label: RegisterOptions.roleLabel,
+              icon: Icons.badge_outlined,
+              value: _role,
+              validator: Validators.role,
+              onChanged: (value) =>
+                  setState(() => _role = value ?? RegisterOptions.roleFarmer),
+              items: [
+                for (final entry in RegisterOptions.roles.entries)
+                  DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+              ],
+            ),
+            AuthInputField(
               label: AppStrings.password,
               icon: Icons.lock_outline_rounded,
               controller: _passwordController,
@@ -3677,22 +4347,74 @@ class _RegisterScreenState extends State<RegisterScreen> {
               onSubmitted: (_) => _submit(),
             ),
           ],
-          submitLabel: AppStrings.register,
+          submitLabel: isLoading && !_googleTapped
+              ? RegisterOptions.registering
+              : AppStrings.register,
           onSubmit: _submit,
           switchPrompt: AppStrings.haveAccount,
           switchActionLabel: AppStrings.signInLink,
           onSwitchPressed: () => context.go(AppRoutes.login),
-          onGooglePressed: isLoading
-              ? null
-              : () => context.read<AuthBloc>().add(
-                  const AuthGoogleSignInRequested(),
-                ),
-          isGoogleLoading: isLoading,
+          onGooglePressed: isLoading ? null : _signInWithGoogle,
+          isGoogleLoading: isLoading && _googleTapped,
           onBack: _goBack,
         );
       },
     );
   }
+}
+</file>
+
+<file path="lib/features/auth/presentation/utils/register_options.dart">
+/// Opciones fijas del formulario de registro (alineadas con `profiles`).
+class RegisterOptions {
+  RegisterOptions._();
+
+  static const department = 'Cesar';
+
+  /// Los 25 municipios del departamento del Cesar.
+  static const cesarMunicipalities = <String>[
+    'Aguachica',
+    'Agustín Codazzi',
+    'Astrea',
+    'Becerril',
+    'Bosconia',
+    'Chimichagua',
+    'Chiriguaná',
+    'Curumaní',
+    'El Copey',
+    'El Paso',
+    'Gamarra',
+    'González',
+    'La Gloria',
+    'La Jagua de Ibirico',
+    'La Paz',
+    'Manaure Balcón del Cesar',
+    'Pailitas',
+    'Pelaya',
+    'Pueblo Bello',
+    'Río de Oro',
+    'San Alberto',
+    'San Diego',
+    'San Martín',
+    'Tamalameque',
+    'Valledupar',
+  ];
+
+  static const roleFarmer = 'FARMER';
+  static const roleAgronomist = 'AGRONOMIST';
+
+  /// Valor guardado en `profiles.role` -> texto visible. ADMIN no se ofrece:
+  /// se asigna solo desde la base de datos.
+  static const roles = <String, String>{
+    roleFarmer: 'Agricultor',
+    roleAgronomist: 'Agrónomo',
+  };
+
+  static const phoneLabel = 'Celular (opcional)';
+  static const municipalityLabel = 'Municipio (Cesar)';
+  static const roleLabel = 'Soy';
+  static const registering = 'Creando cuenta…';
+  static const loggingIn = 'Ingresando…';
 }
 </file>
 
@@ -3720,6 +4442,35 @@ class Validators {
   static String? password(String? value) {
     if (value == null || value.isEmpty) return 'Ingresa tu contraseña';
     if (value.length < 6) return 'Mínimo 6 caracteres';
+    return null;
+  }
+
+  /// Celular colombiano (10 dígitos que empiezan en 3). Es opcional:
+  /// vacío es válido. Acepta espacios, guiones y prefijo +57.
+  static String? phone(String? value) {
+    final digits = normalizePhone(value);
+    if (digits == null) return null;
+    if (!RegExp(r'^3\d{9}$').hasMatch(digits)) {
+      return 'Ingresa un celular de 10 dígitos (ej. 3001234567)';
+    }
+    return null;
+  }
+
+  /// Deja solo los dígitos (sin +57); null si quedó vacío.
+  static String? normalizePhone(String? value) {
+    var digits = (value ?? '').replaceAll(RegExp(r'[^\d+]'), '');
+    if (digits.startsWith('+57')) digits = digits.substring(3);
+    digits = digits.replaceAll('+', '');
+    return digits.isEmpty ? null : digits;
+  }
+
+  static String? municipality(String? value) {
+    if (value == null || value.isEmpty) return 'Selecciona tu municipio';
+    return null;
+  }
+
+  static String? role(String? value) {
+    if (value == null || value.isEmpty) return 'Selecciona tu rol';
     return null;
   }
 }
@@ -4218,6 +4969,91 @@ class _GoogleG extends StatelessWidget {
         'G',
         style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, height: 1),
       ),
+    );
+  }
+}
+</file>
+
+<file path="lib/features/auth/presentation/widgets/auth_dropdown_field.dart">
+import 'package:flutter/material.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+
+/// Lista desplegable con el mismo diseño que [AuthInputField]: etiqueta
+/// arriba, fondo verde suave e ícono a la izquierda.
+class AuthDropdownField<T> extends StatelessWidget {
+  const AuthDropdownField({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.items,
+    required this.onChanged,
+    this.value,
+    this.hint,
+    this.validator,
+  });
+
+  final String label;
+  final IconData icon;
+  final T? value;
+  final String? hint;
+  final List<DropdownMenuItem<T>> items;
+  final ValueChanged<T?>? onChanged;
+  final String? Function(T?)? validator;
+
+  static const _fill = Color(0xFFF1FADF);
+
+  OutlineInputBorder _border([Color? color]) => OutlineInputBorder(
+    borderRadius: BorderRadius.circular(18),
+    borderSide: color == null
+        ? BorderSide.none
+        : BorderSide(color: color, width: 1.4),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+            color: AppColors.splashOnColor,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<T>(
+          initialValue: value,
+          items: items,
+          onChanged: onChanged,
+          validator: validator,
+          isExpanded: true,
+          borderRadius: BorderRadius.circular(18),
+          dropdownColor: Colors.white,
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: AppColors.textSecondary,
+          ),
+          style: const TextStyle(fontSize: 15, color: AppColors.textPrimary),
+          decoration: InputDecoration(
+            hintText: hint ?? label,
+            hintStyle: const TextStyle(
+              fontSize: 15,
+              color: AppColors.textSecondary,
+            ),
+            filled: true,
+            fillColor: _fill,
+            contentPadding: const EdgeInsets.symmetric(vertical: 18),
+            prefixIcon: Icon(icon, color: AppColors.splashOnColor),
+            border: _border(),
+            enabledBorder: _border(),
+            focusedBorder: _border(AppColors.splashOnColor),
+            errorBorder: _border(AppColors.error),
+            focusedErrorBorder: _border(AppColors.error),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -6348,9 +7184,12 @@ class DiagnosisResultView extends StatelessWidget {
 
 <file path="lib/features/home/presentation/screens/home_screen.dart">
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kroppi/core/constants/app_colors.dart';
 import 'package:kroppi/core/constants/app_strings.dart';
+import 'package:kroppi/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:kroppi/features/auth/presentation/bloc/auth_state.dart';
 import 'package:kroppi/navigation/app_routes.dart';
 import 'package:kroppi/features/home/presentation/widgets/diagnose_card.dart';
 import 'package:kroppi/features/home/presentation/widgets/quick_access_tile.dart';
@@ -6359,97 +7198,115 @@ import 'package:kroppi/features/home/presentation/widgets/quick_access_header.da
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  // TODO: reemplazar por el nombre real del usuario autenticado
-  static const _userName = 'Agricultor';
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+    // Solo se reconstruye con AuthAuthenticated para que el nombre no
+    // cambie mientras se cierra la sesión.
+    return BlocBuilder<AuthBloc, AuthState>(
+      buildWhen: (_, current) => current is AuthAuthenticated,
+      builder: (context, state) {
+        final user = state is AuthAuthenticated ? state.user : null;
+        final firstName = user?.fullName.trim().split(' ').first;
+        final displayName = (firstName == null || firstName.isEmpty)
+            ? 'Agricultor'
+            : firstName;
+
+        return Scaffold(
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          AppStrings.greeting,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppColors.textSecondary,
-                          ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              AppStrings.greeting,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            Text(
+                              displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primaryDark,
+                              ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          _userName,
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primaryDark,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton.filledTonal(
-                    onPressed: () => context.push(AppRoutes.notifications),
-                    style: IconButton.styleFrom(
-                      backgroundColor: AppColors.primaryLight.withValues(
-                        alpha: 0.7,
                       ),
-                      foregroundColor: AppColors.primaryDark,
-                      minimumSize: const Size(48, 48),
+                      IconButton.filledTonal(
+                        onPressed: () => context.push(AppRoutes.notifications),
+                        style: IconButton.styleFrom(
+                          backgroundColor: AppColors.primaryLight.withValues(
+                            alpha: 0.7,
+                          ),
+                          foregroundColor: AppColors.primaryDark,
+                          minimumSize: const Size(48, 48),
+                        ),
+                        icon: const Icon(Icons.notifications_none_rounded),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    AppStrings.whatToday,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: AppColors.textSecondary,
                     ),
-                    icon: const Icon(Icons.notifications_none_rounded),
+                  ),
+                  const SizedBox(height: 16),
+                  DiagnoseCard(
+                    onTap: () =>
+                        context.push(AppRoutes.diagnose, extra: user?.id),
+                  ),
+                  const SizedBox(height: 28),
+                  // Para mostrar el enlace "Ver todos >", pasa onSeeAll: () {...}
+                  const QuickAccessHeader(),
+                  const SizedBox(height: 12),
+                  Column(
+                    children: [
+                      QuickAccessTile(
+                        icon: Icons.history_rounded,
+                        label: AppStrings.myDiagnoses,
+                        subtitle: AppStrings.myDiagnosesHint,
+                        tone: QuickAccessTone.mint,
+                        onTap: () => context.go(AppRoutes.history),
+                      ),
+                      const SizedBox(height: 12),
+                      QuickAccessTile(
+                        icon: Icons.grass_rounded,
+                        label: AppStrings.cropGuide,
+                        subtitle: AppStrings.cropGuideHint,
+                        tone: QuickAccessTone.lime,
+                        onTap: () => context.go(AppRoutes.crops),
+                      ),
+                      const SizedBox(height: 12),
+                      QuickAccessTile(
+                        icon: Icons.person_outline_rounded,
+                        label: AppStrings.profile,
+                        subtitle: AppStrings.profileHint,
+                        tone: QuickAccessTone.sky,
+                        onTap: () => context.go(AppRoutes.profile),
+                      ),
+                    ],
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
-              const Text(
-                AppStrings.whatToday,
-                style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 16),
-              DiagnoseCard(onTap: () => context.push(AppRoutes.diagnose)),
-              const SizedBox(height: 28),
-              // Para mostrar el enlace "Ver todos >", pasa onSeeAll: () {...}
-              const QuickAccessHeader(),
-              const SizedBox(height: 12),
-              Column(
-                children: [
-                  QuickAccessTile(
-                    icon: Icons.history_rounded,
-                    label: AppStrings.myDiagnoses,
-                    subtitle: AppStrings.myDiagnosesHint,
-                    tone: QuickAccessTone.mint,
-                    onTap: () => context.go(AppRoutes.history),
-                  ),
-                  const SizedBox(height: 12),
-                  QuickAccessTile(
-                    icon: Icons.grass_rounded,
-                    label: AppStrings.cropGuide,
-                    subtitle: AppStrings.cropGuideHint,
-                    tone: QuickAccessTone.lime,
-                    onTap: () => context.go(AppRoutes.crops),
-                  ),
-                  const SizedBox(height: 12),
-                  QuickAccessTile(
-                    icon: Icons.person_outline_rounded,
-                    label: AppStrings.profile,
-                    subtitle: AppStrings.profileHint,
-                    tone: QuickAccessTone.sky,
-                    onTap: () => context.go(AppRoutes.profile),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -6924,10 +7781,6 @@ import 'package:kroppi/features/profile/presentation/widgets/profile_menu_tile.d
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
-  // TODO: reemplazar por los datos reales del usuario autenticado
-  static const _name = 'Agricultor';
-  static const _email = 'agricultor@correo.com';
-
   Future<void> _confirmLogout(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -6974,39 +7827,73 @@ class ProfileScreen extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
             children: [
-              Center(
-                child: Column(
-                  children: [
-                    Container(
-                      width: 88,
-                      height: 88,
-                      decoration: const BoxDecoration(
-                        color: AppColors.primaryLight,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.person_rounded,
-                        size: 44,
-                        color: AppColors.primary,
-                      ),
+              // Solo se reconstruye con AuthAuthenticated, así el nombre no
+              // parpadea mientras se cierra la sesión (AuthLoading).
+              BlocBuilder<AuthBloc, AuthState>(
+                buildWhen: (_, current) => current is AuthAuthenticated,
+                builder: (context, state) {
+                  final user = state is AuthAuthenticated ? state.user : null;
+                  final name = user?.fullName ?? 'Agricultor';
+                  final email = user?.email ?? '';
+
+                  return Center(
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 88,
+                          height: 88,
+                          decoration: const BoxDecoration(
+                            color: AppColors.primaryLight,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.person_rounded,
+                            size: 44,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          name,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (email.isNotEmpty)
+                          Text(
+                            email,
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 13,
+                            ),
+                          ),
+                        if (user != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            [
+                              user.roleLabel,
+                              user.locationLabel,
+                            ].whereType<String>().join(' · '),
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 13,
+                            ),
+                          ),
+                          if (user.phoneNumber != null)
+                            Text(
+                              user.phoneNumber!,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 13,
+                              ),
+                            ),
+                        ],
+                      ],
                     ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      _name,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      _email,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
               const SizedBox(height: 28),
               ProfileMenuTile(
@@ -7397,8 +8284,11 @@ import 'package:kroppi/core/theme/app_theme.dart';
 import 'package:kroppi/features/auth/data/datasources/auth_remote_data_source.dart';
 import 'package:kroppi/features/auth/data/datasources/supabase_auth_service.dart';
 import 'package:kroppi/features/auth/data/repositories/auth_repository_impl.dart';
+import 'package:kroppi/features/auth/domain/usecases/get_current_user_usecase.dart';
+import 'package:kroppi/features/auth/domain/usecases/sign_in_with_email_usecase.dart';
 import 'package:kroppi/features/auth/domain/usecases/sign_in_with_google_usecase.dart';
 import 'package:kroppi/features/auth/domain/usecases/sign_out_usecase.dart';
+import 'package:kroppi/features/auth/domain/usecases/sign_up_with_email_usecase.dart';
 import 'package:kroppi/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:kroppi/features/crop_diagnosis/data/repositories/crop_diagnosis_repository_impl.dart';
 import 'package:kroppi/features/crop_diagnosis/domain/usecases/analyze_crop_image_usecase.dart';
@@ -7425,6 +8315,9 @@ class KroppiApp extends StatelessWidget {
       child: BlocProvider(
         create: (context) => AuthBloc(
           signInWithGoogle: SignInWithGoogleUsecase(authRepository),
+          signInWithEmail: SignInWithEmailUsecase(authRepository),
+          signUpWithEmail: SignUpWithEmailUsecase(authRepository),
+          getCurrentUser: GetCurrentUserUsecase(authRepository),
           signOut: SignOutUsecase(authRepository),
         ),
         child: MaterialApp.router(
@@ -9490,20 +10383,44 @@ class RunnerTests: XCTestCase {
 
 <file path="test/features/auth/presentation/bloc/auth_bloc_test.dart">
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kroppi/features/auth/domain/entities/app_user.dart';
+import 'package:kroppi/features/auth/domain/entities/sign_up_params.dart';
 import 'package:kroppi/features/auth/domain/repositories/auth_repository.dart';
+import 'package:kroppi/features/auth/domain/usecases/get_current_user_usecase.dart';
+import 'package:kroppi/features/auth/domain/usecases/sign_in_with_email_usecase.dart';
 import 'package:kroppi/features/auth/domain/usecases/sign_in_with_google_usecase.dart';
 import 'package:kroppi/features/auth/domain/usecases/sign_out_usecase.dart';
+import 'package:kroppi/features/auth/domain/usecases/sign_up_with_email_usecase.dart';
 import 'package:kroppi/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:kroppi/features/auth/presentation/bloc/auth_event.dart';
 import 'package:kroppi/features/auth/presentation/bloc/auth_state.dart';
 
+const _testUser = AppUser(
+  id: 'user-1',
+  email: 'agricultor@correo.com',
+  fullName: 'Agricultor Prueba',
+  municipality: 'Valledupar',
+  department: 'Cesar',
+);
+
+const _signUp = SignUpParams(
+  fullName: 'Agricultor Prueba',
+  email: ' agricultor@correo.com ',
+  password: '123456',
+  phoneNumber: '3001234567',
+  municipality: 'Valledupar',
+);
+
 void main() {
   group('AuthBloc', () {
-    test('emits authenticated after Google sign-in succeeds', () async {
+    test('emits authenticated with profile after Google sign-in', () async {
       final bloc = _createBloc();
       final expectedStates = expectLater(
         bloc.stream,
-        emitsInOrder([isA<AuthLoading>(), isA<AuthAuthenticated>()]),
+        emitsInOrder([
+          isA<AuthLoading>(),
+          isA<AuthAuthenticated>().having((s) => s.user, 'user', _testUser),
+        ]),
       );
 
       bloc.add(const AuthGoogleSignInRequested());
@@ -9532,6 +10449,114 @@ void main() {
       await bloc.close();
     });
 
+    test('emits authenticated with profile after email sign-in', () async {
+      final bloc = _createBloc();
+      final expectedStates = expectLater(
+        bloc.stream,
+        emitsInOrder([
+          isA<AuthLoading>(),
+          isA<AuthAuthenticated>().having((s) => s.user, 'user', _testUser),
+        ]),
+      );
+
+      bloc.add(
+        const AuthEmailSignInRequested(
+          email: 'agricultor@correo.com',
+          password: '123456',
+        ),
+      );
+
+      await expectedStates;
+      await bloc.close();
+    });
+
+    test('emits failure when email sign-in fails', () async {
+      final bloc = _createBloc(signInError: StateError('invalid credentials'));
+      final expectedStates = expectLater(
+        bloc.stream,
+        emitsInOrder([
+          isA<AuthLoading>(),
+          isA<AuthFailure>().having(
+            (state) => state.message,
+            'message',
+            contains('invalid credentials'),
+          ),
+        ]),
+      );
+
+      bloc.add(
+        const AuthEmailSignInRequested(
+          email: 'agricultor@correo.com',
+          password: 'mala',
+        ),
+      );
+
+      await expectedStates;
+      await bloc.close();
+    });
+
+    test('sends every form field to the repository on sign-up', () async {
+      final repository = _FakeAuthRepository();
+      final bloc = _createBloc(repository: repository);
+      final expectedStates = expectLater(
+        bloc.stream,
+        emitsInOrder([isA<AuthLoading>(), isA<AuthAuthenticated>()]),
+      );
+
+      bloc.add(const AuthEmailSignUpRequested(_signUp));
+
+      await expectedStates;
+      expect(repository.lastSignUp, _signUp);
+      await bloc.close();
+    });
+
+    test('asks for email confirmation when sign-up returns no session',
+        () async {
+      final bloc = _createBloc(signUpNeedsConfirmation: true);
+      final expectedStates = expectLater(
+        bloc.stream,
+        emitsInOrder([
+          isA<AuthLoading>(),
+          isA<AuthSignUpConfirmationRequired>().having(
+            (state) => state.email,
+            'email',
+            'agricultor@correo.com',
+          ),
+        ]),
+      );
+
+      bloc.add(const AuthEmailSignUpRequested(_signUp));
+
+      await expectedStates;
+      await bloc.close();
+    });
+
+    test('emits unauthenticated when there is no stored session', () async {
+      final bloc = _createBloc(currentUser: null);
+      final expectedStates = expectLater(
+        bloc.stream,
+        emitsInOrder([isA<AuthUnauthenticated>()]),
+      );
+
+      bloc.add(const AuthSessionCheckRequested());
+
+      await expectedStates;
+      await bloc.close();
+    });
+
+    test('emits authenticated when a stored session exists', () async {
+      final bloc = _createBloc();
+      final expectedStates = expectLater(
+        bloc.stream,
+        emitsInOrder([isA<AuthAuthenticated>()]),
+      );
+
+      bloc.add(const AuthSessionCheckRequested());
+
+      await expectedStates;
+      await bloc.close();
+    });
+
     test('emits unauthenticated after sign-out succeeds', () async {
       final bloc = _createBloc();
       final expectedStates = expectLater(
@@ -9547,27 +10572,69 @@ void main() {
   });
 }
 
-AuthBloc _createBloc({Object? signInError}) {
-  final repository = _FakeAuthRepository(signInError: signInError);
+AuthBloc _createBloc({
+  _FakeAuthRepository? repository,
+  Object? signInError,
+  bool signUpNeedsConfirmation = false,
+  AppUser? currentUser = _testUser,
+}) {
+  final repo =
+      repository ??
+      _FakeAuthRepository(
+        signInError: signInError,
+        signUpNeedsConfirmation: signUpNeedsConfirmation,
+        currentUser: currentUser,
+      );
   return AuthBloc(
-    signInWithGoogle: SignInWithGoogleUsecase(repository),
-    signOut: SignOutUsecase(repository),
+    signInWithGoogle: SignInWithGoogleUsecase(repo),
+    signInWithEmail: SignInWithEmailUsecase(repo),
+    signUpWithEmail: SignUpWithEmailUsecase(repo),
+    getCurrentUser: GetCurrentUserUsecase(repo),
+    signOut: SignOutUsecase(repo),
   );
 }
 
 class _FakeAuthRepository implements AuthRepository {
-  _FakeAuthRepository({this.signInError});
+  _FakeAuthRepository({
+    this.signInError,
+    this.signUpNeedsConfirmation = false,
+    this.currentUser = _testUser,
+  });
 
   final Object? signInError;
+  final bool signUpNeedsConfirmation;
+  final AppUser? currentUser;
+
+  SignUpParams? lastSignUp;
 
   @override
-  Future<void> signInWithGoogle() async {
+  Future<AppUser> signInWithGoogle() async {
     final error = signInError;
     if (error != null) throw error;
+    return _testUser;
+  }
+
+  @override
+  Future<AppUser> signInWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    final error = signInError;
+    if (error != null) throw error;
+    return _testUser;
+  }
+
+  @override
+  Future<AppUser?> signUpWithEmail(SignUpParams params) async {
+    lastSignUp = params;
+    return signUpNeedsConfirmation ? null : _testUser;
   }
 
   @override
   Future<void> signOut() async {}
+
+  @override
+  Future<AppUser?> getCurrentUser() async => currentUser;
 }
 </file>
 

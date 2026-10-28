@@ -1,4 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:kroppi/core/network/supabase/supabase_client.dart'
+    as app_supabase;
 import 'package:go_router/go_router.dart';
 import 'package:kroppi/navigation/app_routes.dart';
 import 'package:kroppi/core/widgets/placeholder_screen.dart';
@@ -10,6 +12,11 @@ import 'package:kroppi/navigation/presentation/shell/main_shell.dart';
 import 'package:kroppi/features/history/presentation/screens/history_screen.dart';
 import 'package:kroppi/features/crops/presentation/screens/crops_screen.dart';
 import 'package:kroppi/features/crops/presentation/screens/crop_detail_screen.dart';
+import 'package:kroppi/features/profile/data/datasources/profile_remote_data_source.dart';
+import 'package:kroppi/features/profile/data/repositories/profile_repository_impl.dart';
+import 'package:kroppi/features/profile/domain/usecases/update_profile_usecase.dart';
+import 'package:kroppi/features/profile/presentation/cubit/edit_profile_cubit.dart';
+import 'package:kroppi/features/profile/presentation/screens/personal_data_screen.dart';
 import 'package:kroppi/features/profile/presentation/screens/profile_screen.dart';
 import 'package:kroppi/features/history/presentation/screens/diagnosis_detail_screen.dart';
 import 'package:kroppi/features/crop_diagnosis/domain/usecases/analyze_crop_image_usecase.dart';
@@ -88,6 +95,19 @@ class AppRouter {
             child: DiagnosisScreen(userId: userId),
           );
         },
+      ),
+      GoRoute(
+        path: AppRoutes.personalData,
+        builder: (context, state) => BlocProvider(
+          create: (_) => EditProfileCubit(
+            UpdateProfileUsecase(
+              ProfileRepositoryImpl(
+                ProfileRemoteDataSource(app_supabase.SupabaseClient.client),
+              ),
+            ),
+          ),
+          child: const PersonalDataScreen(),
+        ),
       ),
       GoRoute(
         path: AppRoutes.notifications,

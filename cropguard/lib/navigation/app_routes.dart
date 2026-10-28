@@ -15,6 +15,7 @@ class AppRoutes {
   static const diagnose = '/diagnose';
   static const notifications = '/notifications';
   static const help = '/help';
+  static const personalData = '/profile/personal-data';
 
   // Detalle de un cultivo específico
   static const cropDetail = '/crops/:cropId';
