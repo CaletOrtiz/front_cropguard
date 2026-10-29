@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -277,8 +275,9 @@ class _PersonalDataScreenState extends State<PersonalDataScreen> {
             validator: Validators.role,
             onChanged: (isSaving || isAdmin)
                 ? null
-                : (value) =>
-                      setState(() => _role = value ?? RegisterOptions.roleFarmer),
+                : (value) => setState(
+                    () => _role = value ?? RegisterOptions.roleFarmer,
+                  ),
             items: [
               for (final entry in roles.entries)
                 DropdownMenuItem(value: entry.key, child: Text(entry.value)),

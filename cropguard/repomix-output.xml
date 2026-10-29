@@ -159,6 +159,7 @@ lib/
     usecases/
       usescases.dart
     widgets/
+      app_dropdown_field.dart
       app_search_bar.dart
       app_text_field.dart
       aura_background.dart
@@ -271,11 +272,29 @@ lib/
           quick_access_header.dart
           quick_access_tile.dart
     profile/
+      data/
+        datasources/
+          profile_remote_data_source.dart
+        repositories/
+          profile_repository_impl.dart
+      domain/
+        entities/
+          update_profile_params.dart
+        repositories/
+          profile_repository.dart
+        usecases/
+          update_profile_usecase.dart
       presentation/
+        cubit/
+          edit_profile_cubit.dart
         screens/
+          personal_data_screen.dart
           profile_screen.dart
+        utils/
+          profile_strings.dart
         widgets/
           profile_menu_tile.dart
+          user_avatar.dart
   navigation/
     presentation/
       shell/
@@ -492,6 +511,8 @@ class MainActivity : FlutterActivity()
 
     <!-- Para Android 13 en adelante (API 33+) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+
+    <uses-permission android:name="android.permission.INTERNET"/>
 
     <application
         android:label="Kroppi"
@@ -998,6 +1019,8 @@ import UIKit
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Kroppi necesita acceder a tus fotos para que puedas elegir tu foto de perfil.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -2354,6 +2377,71 @@ abstract class UseCase<T, P> {
 
 class NoParams {
   const NoParams();
+}
+</file>
+
+<file path="lib/core/widgets/app_dropdown_field.dart">
+import 'package:flutter/material.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+
+/// Lista desplegable con el mismo diseño que [AppTextField]: etiqueta
+/// arriba y el estilo de campo del tema.
+class AppDropdownField<T> extends StatelessWidget {
+  const AppDropdownField({
+    super.key,
+    required this.label,
+    required this.items,
+    required this.onChanged,
+    this.value,
+    this.hint,
+    this.validator,
+  });
+
+  final String label;
+  final String? hint;
+  final T? value;
+  final List<DropdownMenuItem<T>> items;
+
+  /// Null deja el campo deshabilitado.
+  final ValueChanged<T?>? onChanged;
+  final String? Function(T?)? validator;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<T>(
+          initialValue: value,
+          items: items,
+          onChanged: onChanged,
+          validator: validator,
+          isExpanded: true,
+          borderRadius: BorderRadius.circular(16),
+          dropdownColor: Colors.white,
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: AppColors.textSecondary,
+          ),
+          decoration: InputDecoration(
+            hintText: hint ?? label,
+            hintStyle: TextStyle(
+              color: AppColors.textSecondary.withValues(alpha: 0.6),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 </file>
 
@@ -3768,6 +3856,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthEmailSignInRequested>(_onEmailSignInRequested);
     on<AuthEmailSignUpRequested>(_onEmailSignUpRequested);
     on<AuthSignOutRequested>(_onSignOutRequested);
+    on<AuthUserUpdated>(_onUserUpdated);
   }
 
   final SignInWithGoogleUsecase signInWithGoogle;
@@ -3775,6 +3864,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final SignUpWithEmailUsecase signUpWithEmail;
   final GetCurrentUserUsecase getCurrentUser;
   final SignOutUsecase signOut;
+
+  void _onUserUpdated(AuthUserUpdated event, Emitter<AuthState> emit) {
+    emit(AuthAuthenticated(user: event.user));
+  }
 
   Future<void> _onSessionCheckRequested(
     AuthSessionCheckRequested event,
@@ -3856,6 +3949,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
 <file path="lib/features/auth/presentation/bloc/auth_event.dart">
 import 'package:equatable/equatable.dart';
+import 'package:kroppi/features/auth/domain/entities/app_user.dart';
 import 'package:kroppi/features/auth/domain/entities/sign_up_params.dart';
 
 sealed class AuthEvent extends Equatable {
@@ -3898,6 +3992,17 @@ final class AuthEmailSignUpRequested extends AuthEvent {
 
 final class AuthSignOutRequested extends AuthEvent {
   const AuthSignOutRequested();
+}
+
+/// El perfil cambió (por ejemplo, se editaron los datos personales): se
+/// reemplaza el usuario de la sesión sin volver a iniciar sesión.
+final class AuthUserUpdated extends AuthEvent {
+  const AuthUserUpdated(this.user);
+
+  final AppUser user;
+
+  @override
+  List<Object?> get props => [user];
 }
 </file>
 
@@ -7766,6 +7871,575 @@ class _DecorPainter extends CustomPainter {
 }
 </file>
 
+<file path="lib/features/profile/data/datasources/profile_remote_data_source.dart">
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'package:kroppi/features/auth/data/models/app_user_model.dart';
+import '../../domain/entities/update_profile_params.dart';
+
+class ProfileRemoteDataSource {
+  const ProfileRemoteDataSource(this._client);
+
+  final SupabaseClient _client;
+
+  static const _bucket = 'avatars';
+  static const _publicPrefix = '/storage/v1/object/public/$_bucket/';
+
+  /// 1) Sube la foto (si hay) a `avatars/<uid>/...`.
+  /// 2) Llama a la función `update_my_profile`, que valida el rol y guarda
+  ///    celular, municipio, rol y foto en `profiles`.
+  /// 3) Borra la foto anterior.
+  Future<AppUserModel> updateProfile(UpdateProfileParams params) async {
+    final authUser = _client.auth.currentUser;
+    if (authUser == null) {
+      throw const AuthException('Tu sesión expiró. Inicia sesión de nuevo.');
+    }
+
+    String? uploadedPath;
+    String? avatarUrl;
+
+    final avatar = params.avatar;
+    if (avatar != null) {
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      uploadedPath =
+          '${authUser.id}/avatar_$stamp.${_extension(avatar.contentType)}';
+      await _client.storage
+          .from(_bucket)
+          .uploadBinary(
+            uploadedPath,
+            avatar.bytes,
+            fileOptions: FileOptions(contentType: avatar.contentType),
+          );
+      avatarUrl = _client.storage.from(_bucket).getPublicUrl(uploadedPath);
+    }
+
+    Object? result;
+    try {
+      result = await _client.rpc(
+        'update_my_profile',
+        params: {
+          'p_phone_number': params.phoneNumber,
+          'p_municipality': params.municipality,
+          'p_role': params.role,
+          'p_avatar_url': avatarUrl,
+        },
+      );
+    } catch (_) {
+      // No dejar una foto huérfana si el perfil no se pudo guardar.
+      if (uploadedPath != null) await _removeQuietly(uploadedPath);
+      rethrow;
+    }
+
+    if (result is! Map) {
+      throw const PostgrestException(
+        message: 'Respuesta inesperada al guardar el perfil.',
+      );
+    }
+
+    if (avatarUrl != null) {
+      final oldPath = _pathFromPublicUrl(
+        params.previousAvatarUrl,
+        authUser.id,
+      );
+      if (oldPath != null && oldPath != uploadedPath) {
+        await _removeQuietly(oldPath);
+      }
+    }
+
+    return AppUserModel.fromProfile(
+      Map<String, dynamic>.from(result),
+      email: authUser.email ?? '',
+    );
+  }
+
+  String _extension(String contentType) => switch (contentType) {
+    'image/png' => 'png',
+    'image/webp' => 'webp',
+    _ => 'jpg',
+  };
+
+  /// Ruta dentro del bucket si la URL es una foto propia del usuario; null
+  /// para fotos de otro origen (por ejemplo, la de Google).
+  String? _pathFromPublicUrl(String? url, String userId) {
+    if (url == null) return null;
+    final index = url.indexOf(_publicPrefix);
+    if (index < 0) return null;
+    final path = Uri.decodeComponent(
+      url.substring(index + _publicPrefix.length).split('?').first,
+    );
+    return path.startsWith('$userId/') ? path : null;
+  }
+
+  Future<void> _removeQuietly(String path) async {
+    try {
+      await _client.storage.from(_bucket).remove([path]);
+    } catch (_) {
+      // Limpieza opcional: si falla, no se interrumpe el guardado.
+    }
+  }
+}
+</file>
+
+<file path="lib/features/profile/data/repositories/profile_repository_impl.dart">
+import 'package:kroppi/core/errors/guard.dart';
+import 'package:kroppi/features/auth/domain/entities/app_user.dart';
+
+import '../../domain/entities/update_profile_params.dart';
+import '../../domain/repositories/profile_repository.dart';
+import '../datasources/profile_remote_data_source.dart';
+
+class ProfileRepositoryImpl implements ProfileRepository {
+  const ProfileRepositoryImpl(this._remoteDataSource);
+
+  final ProfileRemoteDataSource _remoteDataSource;
+
+  @override
+  Future<AppUser> updateProfile(UpdateProfileParams params) {
+    return guardCall<AppUser>(() => _remoteDataSource.updateProfile(params));
+  }
+}
+</file>
+
+<file path="lib/features/profile/domain/entities/update_profile_params.dart">
+import 'dart:typed_data';
+
+import 'package:equatable/equatable.dart';
+
+/// Foto elegida de la galería, lista para subir.
+class AvatarUpload extends Equatable {
+  const AvatarUpload({
+    required this.bytes,
+    required this.fileName,
+    required this.contentType,
+  });
+
+  final Uint8List bytes;
+  final String fileName;
+
+  /// image/jpeg, image/png o image/webp.
+  final String contentType;
+
+  @override
+  List<Object?> get props => [bytes, fileName, contentType];
+}
+
+/// Campos editables en "Datos personales". El nombre y el correo no se
+/// editan desde esta pantalla.
+class UpdateProfileParams extends Equatable {
+  const UpdateProfileParams({
+    required this.municipality,
+    required this.role,
+    this.phoneNumber,
+    this.avatar,
+    this.previousAvatarUrl,
+  });
+
+  /// Null borra el celular.
+  final String? phoneNumber;
+  final String municipality;
+
+  /// FARMER o AGRONOMIST.
+  final String role;
+
+  /// Si es null, la foto actual no cambia.
+  final AvatarUpload? avatar;
+
+  /// Foto anterior: se borra del Storage cuando se sube una nueva.
+  final String? previousAvatarUrl;
+
+  @override
+  List<Object?> get props => [
+    phoneNumber,
+    municipality,
+    role,
+    avatar,
+    previousAvatarUrl,
+  ];
+}
+</file>
+
+<file path="lib/features/profile/domain/repositories/profile_repository.dart">
+import 'package:kroppi/features/auth/domain/entities/app_user.dart';
+
+import '../entities/update_profile_params.dart';
+
+abstract interface class ProfileRepository {
+  /// Guarda los cambios (y la foto, si hay) y devuelve el perfil actualizado.
+  Future<AppUser> updateProfile(UpdateProfileParams params);
+}
+</file>
+
+<file path="lib/features/profile/domain/usecases/update_profile_usecase.dart">
+import 'package:kroppi/features/auth/domain/entities/app_user.dart';
+
+import '../entities/update_profile_params.dart';
+import '../repositories/profile_repository.dart';
+
+class UpdateProfileUsecase {
+  const UpdateProfileUsecase(this._repository);
+
+  final ProfileRepository _repository;
+
+  Future<AppUser> call(UpdateProfileParams params) {
+    return _repository.updateProfile(params);
+  }
+}
+</file>
+
+<file path="lib/features/profile/presentation/cubit/edit_profile_cubit.dart">
+import 'package:equatable/equatable.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:kroppi/features/auth/domain/entities/app_user.dart';
+
+import '../../domain/entities/update_profile_params.dart';
+import '../../domain/usecases/update_profile_usecase.dart';
+
+enum EditProfileStatus { idle, saving, success, failure }
+
+class EditProfileState extends Equatable {
+  const EditProfileState({
+    this.status = EditProfileStatus.idle,
+    this.user,
+    this.message,
+  });
+
+  final EditProfileStatus status;
+
+  /// Perfil ya guardado (solo en `success`).
+  final AppUser? user;
+
+  /// Mensaje de error (solo en `failure`).
+  final String? message;
+
+  bool get isSaving => status == EditProfileStatus.saving;
+
+  @override
+  List<Object?> get props => [status, user, message];
+}
+
+class EditProfileCubit extends Cubit<EditProfileState> {
+  EditProfileCubit(this._updateProfile) : super(const EditProfileState());
+
+  final UpdateProfileUsecase _updateProfile;
+
+  Future<void> save(UpdateProfileParams params) async {
+    if (state.isSaving) return;
+    emit(const EditProfileState(status: EditProfileStatus.saving));
+    try {
+      final user = await _updateProfile(params);
+      emit(EditProfileState(status: EditProfileStatus.success, user: user));
+    } catch (error) {
+      emit(
+        EditProfileState(
+          status: EditProfileStatus.failure,
+          message: error.toString(),
+        ),
+      );
+    }
+  }
+}
+</file>
+
+<file path="lib/features/profile/presentation/screens/personal_data_screen.dart">
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/core/widgets/app_dropdown_field.dart';
+import 'package:kroppi/core/widgets/app_text_field.dart';
+import 'package:kroppi/core/widgets/primary_button.dart';
+import 'package:kroppi/features/auth/domain/entities/app_user.dart';
+import 'package:kroppi/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:kroppi/features/auth/presentation/bloc/auth_event.dart';
+import 'package:kroppi/features/auth/presentation/bloc/auth_state.dart';
+import 'package:kroppi/features/auth/presentation/utils/register_options.dart';
+import 'package:kroppi/features/auth/presentation/utils/validators.dart';
+import 'package:kroppi/features/profile/domain/entities/update_profile_params.dart';
+import 'package:kroppi/features/profile/presentation/cubit/edit_profile_cubit.dart';
+import 'package:kroppi/features/profile/presentation/utils/profile_strings.dart';
+import 'package:kroppi/features/profile/presentation/widgets/user_avatar.dart';
+
+/// "Datos personales": foto (de la galería), celular, municipio y profesión.
+class PersonalDataScreen extends StatefulWidget {
+  const PersonalDataScreen({super.key});
+
+  @override
+  State<PersonalDataScreen> createState() => _PersonalDataScreenState();
+}
+
+class _PersonalDataScreenState extends State<PersonalDataScreen> {
+  static const _maxPhotoBytes = 5 * 1024 * 1024;
+
+  final _formKey = GlobalKey<FormState>();
+  final _phoneController = TextEditingController();
+  final _picker = ImagePicker();
+
+  AppUser? _user;
+  String? _municipality;
+  String _role = RegisterOptions.roleFarmer;
+
+  XFile? _pickedFile;
+  Uint8List? _pickedBytes;
+
+  @override
+  void initState() {
+    super.initState();
+    final state = context.read<AuthBloc>().state;
+    if (state is AuthAuthenticated) {
+      final user = state.user;
+      _user = user;
+      _phoneController.text = user.phoneNumber ?? '';
+      _municipality = user.municipality;
+      _role = user.role;
+    }
+    _phoneController.addListener(_refresh);
+  }
+
+  @override
+  void dispose() {
+    _phoneController
+      ..removeListener(_refresh)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _refresh() => setState(() {});
+
+  /// Hay algo distinto a lo guardado: activa el botón "Guardar cambios".
+  bool get _hasChanges {
+    final user = _user;
+    if (user == null) return false;
+    return _pickedBytes != null ||
+        Validators.normalizePhone(_phoneController.text) !=
+            Validators.normalizePhone(user.phoneNumber) ||
+        _municipality != user.municipality ||
+        _role != user.role;
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// Abre el selector de fotos del sistema. No pide permisos propios: en
+  /// Android 13+ usa el Photo Picker y en iOS el selector PHPicker, que solo
+  /// dan acceso a la foto elegida.
+  Future<void> _pickPhoto() async {
+    try {
+      final file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+      if (file == null) return; // el usuario canceló
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      if (bytes.lengthInBytes > _maxPhotoBytes) {
+        _showMessage(ProfileStrings.photoTooBig);
+        return;
+      }
+      setState(() {
+        _pickedFile = file;
+        _pickedBytes = bytes;
+      });
+    } on PlatformException {
+      if (mounted) _showMessage(ProfileStrings.galleryError);
+    }
+  }
+
+  String _contentType(String fileName) {
+    final name = fileName.toLowerCase();
+    if (name.endsWith('.png')) return 'image/png';
+    if (name.endsWith('.webp')) return 'image/webp';
+    return 'image/jpeg';
+  }
+
+  void _save() {
+    final user = _user;
+    if (user == null || !_formKey.currentState!.validate()) return;
+
+    final bytes = _pickedBytes;
+    final file = _pickedFile;
+
+    context.read<EditProfileCubit>().save(
+      UpdateProfileParams(
+        phoneNumber: Validators.normalizePhone(_phoneController.text),
+        municipality: _municipality!,
+        role: _role,
+        previousAvatarUrl: user.avatarUrl,
+        avatar: (bytes == null || file == null)
+            ? null
+            : AvatarUpload(
+                bytes: bytes,
+                fileName: file.name,
+                contentType: _contentType(file.name),
+              ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = _user;
+
+    return BlocListener<EditProfileCubit, EditProfileState>(
+      listener: (context, state) {
+        if (state.status == EditProfileStatus.success && state.user != null) {
+          // Actualiza el perfil en toda la app (Perfil, Inicio, etc.).
+          context.read<AuthBloc>().add(AuthUserUpdated(state.user!));
+          _showMessage(ProfileStrings.saved);
+          if (context.canPop()) context.pop();
+        } else if (state.status == EditProfileStatus.failure) {
+          _showMessage('${ProfileStrings.saveError}: ${state.message}');
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(title: const Text(ProfileStrings.personalData)),
+        body: SafeArea(
+          child: user == null
+              ? const Center(child: Text('Inicia sesión para ver tus datos'))
+              : _buildForm(user),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildForm(AppUser user) {
+    final isSaving = context.watch<EditProfileCubit>().state.isSaving;
+
+    // Si el municipio guardado no está en la lista, se agrega para poder
+    // mostrarlo sin romper el campo.
+    final municipalities = [
+      ...RegisterOptions.cesarMunicipalities,
+      if (user.municipality != null &&
+          !RegisterOptions.cesarMunicipalities.contains(user.municipality))
+        user.municipality!,
+    ];
+
+    // ADMIN no se ofrece ni se cambia desde la app.
+    final isAdmin = user.role == 'ADMIN';
+    final roles = <String, String>{
+      ...RegisterOptions.roles,
+      if (isAdmin) 'ADMIN': user.roleLabel,
+    };
+
+    return Form(
+      key: _formKey,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+        children: [
+          Center(
+            child: Column(
+              children: [
+                GestureDetector(
+                  onTap: isSaving ? null : _pickPhoto,
+                  child: Stack(
+                    children: [
+                      UserAvatar(
+                        size: 104,
+                        bytes: _pickedBytes,
+                        imageUrl: user.avatarUrl,
+                      ),
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: const Icon(
+                            Icons.photo_camera_rounded,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: isSaving ? null : _pickPhoto,
+                  child: const Text(ProfileStrings.changePhoto),
+                ),
+                Text(
+                  user.fullName,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (user.email.isNotEmpty)
+                  Text(
+                    user.email,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 28),
+          AppTextField(
+            label: ProfileStrings.phone,
+            hint: ProfileStrings.phoneHint,
+            controller: _phoneController,
+            validator: Validators.phone,
+            keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.done,
+          ),
+          const SizedBox(height: 16),
+          AppDropdownField<String>(
+            label: ProfileStrings.municipality,
+            hint: ProfileStrings.municipalityHint,
+            value: _municipality,
+            validator: Validators.municipality,
+            onChanged: isSaving
+                ? null
+                : (value) => setState(() => _municipality = value),
+            items: [
+              for (final name in municipalities)
+                DropdownMenuItem(value: name, child: Text(name)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          AppDropdownField<String>(
+            label: ProfileStrings.profession,
+            value: roles.containsKey(_role) ? _role : null,
+            validator: Validators.role,
+            onChanged: (isSaving || isAdmin)
+                ? null
+                : (value) =>
+                      setState(() => _role = value ?? RegisterOptions.roleFarmer),
+            items: [
+              for (final entry in roles.entries)
+                DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+            ],
+          ),
+          const SizedBox(height: 28),
+          PrimaryButton(
+            label: ProfileStrings.save,
+            isLoading: isSaving,
+            onPressed: _hasChanges ? _save : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+</file>
+
 <file path="lib/features/profile/presentation/screens/profile_screen.dart">
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -7776,7 +8450,9 @@ import 'package:kroppi/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:kroppi/features/auth/presentation/bloc/auth_event.dart';
 import 'package:kroppi/features/auth/presentation/bloc/auth_state.dart';
 import 'package:kroppi/navigation/app_routes.dart';
+import 'package:kroppi/features/profile/presentation/utils/profile_strings.dart';
 import 'package:kroppi/features/profile/presentation/widgets/profile_menu_tile.dart';
+import 'package:kroppi/features/profile/presentation/widgets/user_avatar.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -7839,19 +8515,7 @@ class ProfileScreen extends StatelessWidget {
                   return Center(
                     child: Column(
                       children: [
-                        Container(
-                          width: 88,
-                          height: 88,
-                          decoration: const BoxDecoration(
-                            color: AppColors.primaryLight,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.person_rounded,
-                            size: 44,
-                            color: AppColors.primary,
-                          ),
-                        ),
+                        UserAvatar(imageUrl: user?.avatarUrl),
                         const SizedBox(height: 12),
                         Text(
                           name,
@@ -7897,6 +8561,12 @@ class ProfileScreen extends StatelessWidget {
               ),
               const SizedBox(height: 28),
               ProfileMenuTile(
+                icon: Icons.person_outline_rounded,
+                label: ProfileStrings.personalData,
+                onTap: () => context.push(AppRoutes.personalData),
+              ),
+              const SizedBox(height: 10),
+              ProfileMenuTile(
                 icon: Icons.grass_rounded,
                 label: AppStrings.myCrops,
                 onTap: () => context.go(AppRoutes.crops),
@@ -7926,6 +8596,27 @@ class ProfileScreen extends StatelessWidget {
       ),
     );
   }
+}
+</file>
+
+<file path="lib/features/profile/presentation/utils/profile_strings.dart">
+class ProfileStrings {
+  ProfileStrings._();
+
+  static const personalData = 'Datos personales';
+  static const changePhoto = 'Cambiar foto';
+  static const changePhotoHint = 'Elige una foto de tu galería';
+  static const phone = 'Celular';
+  static const phoneHint = '3001234567';
+  static const municipality = 'Municipio (Cesar)';
+  static const municipalityHint = 'Selecciona tu municipio';
+  static const profession = 'Profesión';
+  static const save = 'Guardar cambios';
+  static const saved = 'Datos actualizados';
+  static const photoTooBig = 'La foto pesa más de 5 MB. Elige una más liviana.';
+  static const galleryError =
+      'No se pudo abrir la galería. Revisa el permiso de fotos de Kroppi en los ajustes del teléfono.';
+  static const saveError = 'No se pudieron guardar los datos';
 }
 </file>
 
@@ -7985,6 +8676,55 @@ class ProfileMenuTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+</file>
+
+<file path="lib/features/profile/presentation/widgets/user_avatar.dart">
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+
+/// Foto de perfil redonda. Prioriza [bytes] (foto recién elegida), luego
+/// [imageUrl] y, si no hay ninguna o falla la carga, muestra el ícono.
+class UserAvatar extends StatelessWidget {
+  const UserAvatar({super.key, this.imageUrl, this.bytes, this.size = 88});
+
+  final String? imageUrl;
+  final Uint8List? bytes;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = Icon(
+      Icons.person_rounded,
+      size: size * 0.5,
+      color: AppColors.primary,
+    );
+
+    Widget content = fallback;
+    if (bytes != null) {
+      content = Image.memory(bytes!, fit: BoxFit.cover);
+    } else if (imageUrl != null && imageUrl!.isNotEmpty) {
+      content = Image.network(
+        imageUrl!,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => fallback,
+      );
+    }
+
+    return Container(
+      width: size,
+      height: size,
+      clipBehavior: Clip.antiAlias,
+      decoration: const BoxDecoration(
+        color: AppColors.primaryLight,
+        shape: BoxShape.circle,
+      ),
+      alignment: Alignment.center,
+      child: content,
     );
   }
 }
@@ -8128,6 +8868,8 @@ class MainShell extends StatelessWidget {
 
 <file path="lib/navigation/app_router.dart">
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:kroppi/core/network/supabase/supabase_client.dart'
+    as app_supabase;
 import 'package:go_router/go_router.dart';
 import 'package:kroppi/navigation/app_routes.dart';
 import 'package:kroppi/core/widgets/placeholder_screen.dart';
@@ -8139,6 +8881,11 @@ import 'package:kroppi/navigation/presentation/shell/main_shell.dart';
 import 'package:kroppi/features/history/presentation/screens/history_screen.dart';
 import 'package:kroppi/features/crops/presentation/screens/crops_screen.dart';
 import 'package:kroppi/features/crops/presentation/screens/crop_detail_screen.dart';
+import 'package:kroppi/features/profile/data/datasources/profile_remote_data_source.dart';
+import 'package:kroppi/features/profile/data/repositories/profile_repository_impl.dart';
+import 'package:kroppi/features/profile/domain/usecases/update_profile_usecase.dart';
+import 'package:kroppi/features/profile/presentation/cubit/edit_profile_cubit.dart';
+import 'package:kroppi/features/profile/presentation/screens/personal_data_screen.dart';
 import 'package:kroppi/features/profile/presentation/screens/profile_screen.dart';
 import 'package:kroppi/features/history/presentation/screens/diagnosis_detail_screen.dart';
 import 'package:kroppi/features/crop_diagnosis/domain/usecases/analyze_crop_image_usecase.dart';
@@ -8219,6 +8966,19 @@ class AppRouter {
         },
       ),
       GoRoute(
+        path: AppRoutes.personalData,
+        builder: (context, state) => BlocProvider(
+          create: (_) => EditProfileCubit(
+            UpdateProfileUsecase(
+              ProfileRepositoryImpl(
+                ProfileRemoteDataSource(app_supabase.SupabaseClient.client),
+              ),
+            ),
+          ),
+          child: const PersonalDataScreen(),
+        ),
+      ),
+      GoRoute(
         path: AppRoutes.notifications,
         builder: (context, state) =>
             const PlaceholderScreen(title: 'Notificaciones'),
@@ -8262,6 +9022,7 @@ class AppRoutes {
   static const diagnose = '/diagnose';
   static const notifications = '/notifications';
   static const help = '/help';
+  static const personalData = '/profile/personal-data';
 
   // Detalle de un cultivo específico
   static const cropDetail = '/crops/:cropId';
@@ -10552,6 +11313,30 @@ void main() {
       );
 
       bloc.add(const AuthSessionCheckRequested());
+
+      await expectedStates;
+      await bloc.close();
+    });
+
+    test('replaces the session user when the profile is updated', () async {
+      final bloc = _createBloc();
+      const updated = AppUser(
+        id: 'user-1',
+        email: 'agricultor@correo.com',
+        fullName: 'Agricultor Prueba',
+        role: 'AGRONOMIST',
+        municipality: 'Codazzi',
+        department: 'Cesar',
+        phoneNumber: '3001234567',
+      );
+      final expectedStates = expectLater(
+        bloc.stream,
+        emitsInOrder([
+          isA<AuthAuthenticated>().having((s) => s.user, 'user', updated),
+        ]),
+      );
+
+      bloc.add(const AuthUserUpdated(updated));
 
       await expectedStates;
       await bloc.close();

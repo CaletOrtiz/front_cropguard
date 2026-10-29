@@ -3,13 +3,18 @@ import 'package:kroppi/features/history/domain/entities/diagnosis_record.dart';
 import 'package:kroppi/features/history/presentation/widgets/diagnosis_result_view.dart';
 
 class DiagnosisDetailScreen extends StatelessWidget {
-  const DiagnosisDetailScreen({super.key, required this.diagnosisId});
+  const DiagnosisDetailScreen({
+    super.key,
+    required this.diagnosisId,
+    this.record,
+  });
 
   final String diagnosisId;
+  final DiagnosisRecord? record;
 
   @override
   Widget build(BuildContext context) {
-    final record = SampleDiagnoses.byId(diagnosisId);
+    final record = this.record;
 
     if (record == null) {
       return Scaffold(

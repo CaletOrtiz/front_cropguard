@@ -22,6 +22,11 @@ import 'package:kroppi/features/history/presentation/screens/diagnosis_detail_sc
 import 'package:kroppi/features/crop_diagnosis/domain/usecases/analyze_crop_image_usecase.dart';
 import 'package:kroppi/features/crop_diagnosis/presentation/bloc/diagnosis_bloc.dart';
 import 'package:kroppi/features/crop_diagnosis/presentation/screens/diagnosis_screen.dart';
+import 'package:kroppi/features/history/data/datasources/history_remote_data_source.dart';
+import 'package:kroppi/features/history/data/repositories/history_repository_impl.dart';
+import 'package:kroppi/features/history/domain/entities/diagnosis_record.dart';
+import 'package:kroppi/features/history/domain/usecases/get_diagnosis_history_usecase.dart';
+import 'package:kroppi/features/history/presentation/cubit/history_cubit.dart';
 
 class AppRouter {
   AppRouter._();
@@ -58,7 +63,18 @@ class AppRouter {
             routes: [
               GoRoute(
                 path: AppRoutes.history,
-                builder: (context, state) => const HistoryScreen(),
+                builder: (context, state) => BlocProvider(
+                  create: (_) => HistoryCubit(
+                    GetDiagnosisHistoryUsecase(
+                      HistoryRepositoryImpl(
+                        HistoryRemoteDataSource(
+                          app_supabase.SupabaseClient.client,
+                        ),
+                      ),
+                    ),
+                  )..load(),
+                  child: const HistoryScreen(),
+                ),
               ),
             ],
           ),
@@ -128,6 +144,7 @@ class AppRouter {
         path: AppRoutes.diagnosisDetail,
         builder: (context, state) => DiagnosisDetailScreen(
           diagnosisId: state.pathParameters['diagnosisId']!,
+          record: state.extra as DiagnosisRecord?,
         ),
       ),
     ],
