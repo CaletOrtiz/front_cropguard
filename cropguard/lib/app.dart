@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:dio/dio.dart';
 import 'package:kroppi/core/constants/app_strings.dart';
+import 'package:kroppi/core/network/api/fastapi_client.dart';
 import 'package:kroppi/core/network/supabase/supabase_client.dart'
     as app_supabase;
 import 'package:kroppi/core/theme/app_theme.dart';
@@ -30,7 +30,7 @@ class KroppiApp extends StatelessWidget {
     );
     final analyzeCropImageUsecase = AnalyzeCropImageUsecase(
       repository: CropDiagnosisRepositoryImpl(
-        dioClient: Dio(BaseOptions(baseUrl: 'https://tu-backend-api.com')),
+        dioClient: FastApiClient.client,
       ),
     );
 

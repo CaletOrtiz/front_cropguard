@@ -12,11 +12,17 @@ class AnalyzeCropImageUsecase {
     required File imageFile,
     required String userId,
     String? prompt,
+    String cropSlug = 'cafe',
+    double? latitude,
+    double? longitude,
   }) async {
     return await repository.analyzeCropImage(
       imageFile: imageFile,
       userId: userId,
       prompt: prompt,
+      cropSlug: cropSlug,
+      latitude: latitude,
+      longitude: longitude,
     );
   }
 }

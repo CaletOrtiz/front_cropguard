@@ -102,6 +102,19 @@ class DiagnosisScreen extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+                      if (state.result.scientificName.isNotEmpty &&
+                          state.result.scientificName != 'No especificado') ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Nombre científico: ${state.result.scientificName}',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontStyle: FontStyle.italic,
+                            color: Colors.teal,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       Text(
                         'Confianza: ${(state.result.confidence * 100).toStringAsFixed(1)}%',
@@ -119,7 +132,12 @@ class DiagnosisScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text(state.result.geminiRecommendations),
+                      Text(
+                        state.result.geminiRecommendations.isNotEmpty
+                            ? state.result.geminiRecommendations
+                            : 'No se generaron recomendaciones adicionales.',
+                        style: const TextStyle(fontSize: 15, height: 1.4),
+                      ),
                     ],
                   ),
                 ),

@@ -22,6 +22,10 @@ class DiagnosisBloc extends Bloc<DiagnosisEvent, DiagnosisState> {
       final result = await analyzeCropImageUseCase(
         imageFile: event.imageFile,
         userId: event.userId,
+        prompt: event.prompt,
+        cropSlug: event.cropSlug,
+        latitude: event.latitude,
+        longitude: event.longitude,
       );
       emit(DiagnosisSuccessState(result: result));
     } catch (e) {

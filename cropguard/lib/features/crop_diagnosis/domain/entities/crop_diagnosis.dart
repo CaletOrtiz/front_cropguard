@@ -5,6 +5,7 @@ class CropDiagnosis extends Equatable {
   final String userId;
   final String imageUrl;
   final String diseaseName;
+  final String scientificName;
   final double confidence;
   final String geminiRecommendations;
   final DateTime createdAt;
@@ -14,6 +15,7 @@ class CropDiagnosis extends Equatable {
     required this.userId,
     required this.imageUrl,
     required this.diseaseName,
+    this.scientificName = 'No especificado',
     required this.confidence,
     required this.geminiRecommendations,
     required this.createdAt,
@@ -25,6 +27,7 @@ class CropDiagnosis extends Equatable {
     userId,
     imageUrl,
     diseaseName,
+    scientificName,
     confidence,
     geminiRecommendations,
     createdAt,
