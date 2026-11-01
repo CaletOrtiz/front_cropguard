@@ -1,14 +1,14 @@
-import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 
 import '../entities/crop_diagnosis.dart';
 
-/// Contrato del repositorio para el análisis fitosanitario con FastAPI.
 abstract class CropDiagnosisRepository {
   Future<CropDiagnosis> analyzeCropImage({
-    required File imageFile,
+    required XFile imageFile,
     required String userId,
     String? prompt,
     String cropSlug = 'cafe',
+    String? plotId,
     double? latitude,
     double? longitude,
   });

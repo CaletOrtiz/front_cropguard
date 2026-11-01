@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:kroppi/core/constants/app_colors.dart';
 import 'package:kroppi/core/constants/app_strings.dart';
-import 'package:kroppi/features/crops/domain/entities/crop.dart';
+import 'package:kroppi/features/guide/domain/entities/crop.dart';
 import 'package:kroppi/core/widgets/bullet_list.dart';
 import 'package:kroppi/core/widgets/crop_visual.dart';
 

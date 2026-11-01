@@ -8,11 +8,9 @@ class HistoryRemoteDataSource {
   final SupabaseClient _client;
 
   static const _select = '''
-    id, image_url, created_at, ai_prediction,
-    crop:crops ( id, name, slug ),
-    disease:diseases ( id, code, name, scientific_name, pathogen_type,
-                       symptoms, general_recommendations, requires_agronomist )
-  ''';
+  id, image_url, created_at, ai_prediction, predicted_label, confidence,
+  recommendations, plot_id,
+  crop_type:crop_types ( id, name, slug )''';
 
   String get _userId {
     final id = _client.auth.currentUser?.id;

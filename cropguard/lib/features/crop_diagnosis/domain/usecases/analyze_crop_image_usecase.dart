@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 
 import '../entities/crop_diagnosis.dart';
 import '../repositories/crop_diagnosis_repository.dart';
@@ -9,10 +9,11 @@ class AnalyzeCropImageUsecase {
   AnalyzeCropImageUsecase({required this.repository});
 
   Future<CropDiagnosis> call({
-    required File imageFile,
+    required XFile imageFile,
     required String userId,
     String? prompt,
     String cropSlug = 'cafe',
+    String? plotId,
     double? latitude,
     double? longitude,
   }) async {
@@ -21,6 +22,7 @@ class AnalyzeCropImageUsecase {
       userId: userId,
       prompt: prompt,
       cropSlug: cropSlug,
+      plotId: plotId,
       latitude: latitude,
       longitude: longitude,
     );

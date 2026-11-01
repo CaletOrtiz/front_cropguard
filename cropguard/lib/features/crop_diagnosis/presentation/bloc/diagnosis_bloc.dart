@@ -24,6 +24,7 @@ class DiagnosisBloc extends Bloc<DiagnosisEvent, DiagnosisState> {
         userId: event.userId,
         prompt: event.prompt,
         cropSlug: event.cropSlug,
+        plotId: event.plotId,
         latitude: event.latitude,
         longitude: event.longitude,
       );

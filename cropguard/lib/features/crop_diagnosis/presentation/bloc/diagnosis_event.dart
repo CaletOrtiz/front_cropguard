@@ -1,12 +1,13 @@
-import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 
 abstract class DiagnosisEvent {}
 
 class AnalyzeImageSubmittedEvent extends DiagnosisEvent {
-  final File imageFile;
+  final XFile imageFile;
   final String userId;
   final String? prompt;
   final String cropSlug;
+  final String? plotId;
   final double? latitude;
   final double? longitude;
 
@@ -15,6 +16,7 @@ class AnalyzeImageSubmittedEvent extends DiagnosisEvent {
     required this.userId,
     this.prompt,
     this.cropSlug = 'cafe',
+    this.plotId,
     this.latitude,
     this.longitude,
   });

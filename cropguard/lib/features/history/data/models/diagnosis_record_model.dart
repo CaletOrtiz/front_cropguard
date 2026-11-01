@@ -17,33 +17,33 @@ class DiagnosisRecordModel extends DiagnosisRecord {
   final String? imageUrl;
 
   factory DiagnosisRecordModel.fromJson(Map<String, dynamic> json) {
-    final crop = json['crop'] as Map<String, dynamic>? ?? {};
-    final disease = json['disease'] as Map<String, dynamic>?;
+    final crop = json['crop_type'] as Map<String, dynamic>? ?? {};
     final ai = json['ai_prediction'] as Map<String, dynamic>? ?? {};
 
     List<String> strings(dynamic v) =>
         (v as List?)?.map((e) => e.toString()).toList() ?? const [];
 
-    // Recomendaciones: primero las de la IA; si vienen vacías, las de la enfermedad.
-    final aiRecs = strings(ai['recommendations']);
+    final sci = ai['scientific_name']?.toString();
+    final pathogen = (sci != null && sci != 'No especificado')
+        ? sci
+        : (ai['disease_name']?.toString() ?? 'No identificado');
+
+    final recs = strings(json['recommendations']);
 
     return DiagnosisRecordModel(
       id: json['id'].toString(),
       cropId: crop['slug']?.toString() ?? 'otros',
       cropName: crop['name']?.toString() ?? 'Cultivo',
-      pathogen:
-          disease?['scientific_name']?.toString() ??
-          disease?['name']?.toString() ??
-          'No identificado',
-      pathogenType: disease?['pathogen_type']?.toString() ?? '',
+      pathogen: pathogen,
+      pathogenType: ai['pathogen_type']?.toString() ?? '',
       date:
           DateTime.tryParse(json['created_at']?.toString() ?? '')?.toLocal() ??
           DateTime.now(),
-      confidence: (((ai['confidence'] as num?) ?? 0) * 100).round(),
-      symptoms: strings(disease?['symptoms']),
-      recommendations: aiRecs.isNotEmpty
-          ? aiRecs
-          : strings(disease?['general_recommendations']),
+      confidence:
+          ((((json['confidence'] ?? ai['confidence']) as num?) ?? 0) * 100)
+              .round(),
+      symptoms: strings(ai['symptoms']),
+      recommendations: recs,
       imageUrl: json['image_url']?.toString(),
     );
   }

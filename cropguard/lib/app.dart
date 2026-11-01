@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:kroppi/core/constants/app_strings.dart';
 import 'package:kroppi/core/network/api/fastapi_client.dart';
+import 'package:kroppi/core/network/api/services/ai_backend_service.dart';
 import 'package:kroppi/core/network/supabase/supabase_client.dart'
     as app_supabase;
 import 'package:kroppi/core/theme/app_theme.dart';
@@ -16,6 +17,7 @@ import 'package:kroppi/features/auth/domain/usecases/sign_up_with_email_usecase.
 import 'package:kroppi/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:kroppi/features/crop_diagnosis/data/repositories/crop_diagnosis_repository_impl.dart';
 import 'package:kroppi/features/crop_diagnosis/domain/usecases/analyze_crop_image_usecase.dart';
+import 'package:kroppi/features/my_crops/data/datasources/my_crops_remote_data_source.dart';
 import 'package:kroppi/navigation/app_router.dart';
 
 class KroppiApp extends StatelessWidget {
@@ -29,13 +31,18 @@ class KroppiApp extends StatelessWidget {
       ),
     );
     final analyzeCropImageUsecase = AnalyzeCropImageUsecase(
-      repository: CropDiagnosisRepositoryImpl(
-        dioClient: FastApiClient.client,
-      ),
+      repository: CropDiagnosisRepositoryImpl(dioClient: FastApiClient.client),
     );
 
-    return RepositoryProvider<AnalyzeCropImageUsecase>.value(
-      value: analyzeCropImageUsecase,
+    return MultiRepositoryProvider(
+      providers: [
+        RepositoryProvider<AnalyzeCropImageUsecase>.value(
+          value: analyzeCropImageUsecase,
+        ),
+        RepositoryProvider<MyCropsRemoteDataSource>.value(
+          value: MyCropsRemoteDataSource(AiBackendService()),
+        ),
+      ],
       child: BlocProvider(
         create: (context) => AuthBloc(
           signInWithGoogle: SignInWithGoogleUsecase(authRepository),

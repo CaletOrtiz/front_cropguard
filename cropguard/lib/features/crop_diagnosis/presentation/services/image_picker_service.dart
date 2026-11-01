@@ -1,31 +1,16 @@
-import 'dart:io';
-
 import 'package:image_picker/image_picker.dart';
 
+/// Devuelve [XFile] (compatible con web, Android e iOS).
+/// No usar dart:io `File` aquí: en Flutter web lanza
+/// "Unsupported operation: _Namespace".
 class ImagePickerService {
   final ImagePicker _picker = ImagePicker();
 
-  Future<File?> pickImageFromCamera() async {
-    final XFile? pickedFile = await _picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 85,
-    );
-
-    if (pickedFile != null) {
-      return File(pickedFile.path);
-    }
-    return null;
+  Future<XFile?> pickImageFromCamera() {
+    return _picker.pickImage(source: ImageSource.camera, imageQuality: 85);
   }
 
-  Future<File?> pickImageFromGallery() async {
-    final XFile? pickedFile = await _picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 85,
-    );
-
-    if (pickedFile != null) {
-      return File(pickedFile.path);
-    }
-    return null;
+  Future<XFile?> pickImageFromGallery() {
+    return _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
   }
 }

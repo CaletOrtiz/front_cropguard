@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:kroppi/core/constants/app_colors.dart';
 import 'package:kroppi/core/constants/app_crop_visuals.dart';
-import 'package:kroppi/features/crops/domain/entities/crop.dart';
+import 'package:kroppi/features/guide/domain/entities/crop.dart';
 
 /// Tarjeta vertical de un cultivo: foto arriba, insignia circular con el
 /// ícono del cultivo, nombre, enfermedades comunes y flecha.

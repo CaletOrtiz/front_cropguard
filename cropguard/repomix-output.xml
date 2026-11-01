@@ -152,6 +152,12 @@ lib/
       failures.dart
       guard.dart
     network/
+      api/
+        services/
+          ai_backend_service.dart
+        api_endpoints.dart
+        api_interceptors.dart
+        fastapi_client.dart
       supabase/
         supabase_client.dart
     theme/
@@ -219,6 +225,8 @@ lib/
           social_auth_section.dart
     crop_diagnosis/
       data/
+        datasources/
+          crop_diagnosis_remote_data_source.dart
         models/
           crop_diagnosis_model.dart
         repositories/
@@ -239,7 +247,7 @@ lib/
           diagnosis_screen.dart
         services/
           image_picker_service.dart
-    crops/
+    guide/
       domain/
         entities/
           crop.dart
@@ -251,10 +259,24 @@ lib/
           crop_card.dart
           crop_search_field.dart
     history/
+      data/
+        datasources/
+          history_remote_data_source.dart
+        models/
+          diagnosis_record_model.dart
+        repositories/
+          history_repository_impl.dart
       domain/
         entities/
           diagnosis_record.dart
+        repositories/
+          history_repository.dart
+        usecases/
+          get_diagnosis_by_id_usecase.dart
+          get_diagnosis_history_usecase.dart
       presentation/
+        cubit/
+          history_cubit.dart
         screens/
           diagnosis_detail_screen.dart
           history_screen.dart
@@ -271,6 +293,28 @@ lib/
           diagnose_card.dart
           quick_access_header.dart
           quick_access_tile.dart
+    my_crops/
+      data/
+        datasources/
+          my_crops_remote_data_source.dart
+      domain/
+        entities/
+          my_crop.dart
+          plot_sample.dart
+          plot.dart
+      presentation/
+        cubit/
+          my_crops_cubit.dart
+          plot_detail_cubit.dart
+        screens/
+          crop_detail_screen.dart
+          crop_form_screen.dart
+          my_crops_screen.dart
+          plot_detail_screen.dart
+          plot_form_screen.dart
+        widgets/
+          incidence_chart.dart
+          plot_status_chip.dart
     profile/
       data/
         datasources/
@@ -295,6 +339,13 @@ lib/
         widgets/
           profile_menu_tile.dart
           user_avatar.dart
+    sampling/
+      presentation/
+        cubit/
+          sampling_cubit.dart
+        screens/
+          sampling_screen.dart
+          sampling_summary_screen.dart
   navigation/
     presentation/
       shell/
@@ -517,7 +568,8 @@ class MainActivity : FlutterActivity()
     <application
         android:label="Kroppi"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -2248,6 +2300,416 @@ String _authMessage(String raw) {
 String _dbMessage(PostgrestException e) {
   if (e.code == '42501') return 'No tienes permiso para realizar esta acción.';
   return e.message;
+}
+</file>
+
+<file path="lib/core/network/api/services/ai_backend_service.dart">
+import 'dart:io';
+import 'package:dio/dio.dart';
+import 'package:http_parser/http_parser.dart';
+import 'package:kroppi/core/errors/failures.dart';
+import '../api_endpoints.dart';
+import '../fastapi_client.dart';
+
+/// Servicio de red para la integración con los endpoints de FastAPI:
+/// 1. GET  /health                     (Público - Estado y versión de modelo)
+/// 2. POST /diagnoses                  (Token - Envía imagen en campo `file` y orquesta diagnóstico)
+/// 3. GET  /diagnoses                  (Token - Lista diagnósticos con limit/offset)
+/// 4. GET  /diagnoses/{diagnostico_id} (Token - Consulta diagnóstico por UUID)
+/// 5. send(...)                        (Genérico - cultivos, lotes y muestreos)
+class AiBackendService {
+  final Dio _dio;
+
+  AiBackendService({Dio? dio}) : _dio = dio ?? FastApiClient.client;
+
+  MediaType _resolveMediaType(String path) {
+    final ext = path.split('.').last.toLowerCase();
+    switch (ext) {
+      case 'png':
+        return MediaType('image', 'png');
+      case 'webp':
+        return MediaType('image', 'webp');
+      case 'jpg':
+      case 'jpeg':
+      default:
+        return MediaType('image', 'jpeg');
+    }
+  }
+
+  Never _handleDioError(DioException e) {
+    if (e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.receiveTimeout ||
+        e.type == DioExceptionType.sendTimeout ||
+        e.type == DioExceptionType.connectionError) {
+      throw const NetworkFailure();
+    }
+
+    final statusCode = e.response?.statusCode;
+    if (statusCode == 401 || statusCode == 403) {
+      throw const AuthFailure(
+        'No autorizado. Tu sesión expiró o el token es inválido.',
+      );
+    }
+
+    if (statusCode == 404) {
+      final d = e.response?.data;
+      final msg = (d is Map && d['detail'] is String)
+          ? d['detail'] as String
+          : 'No se encontró lo que buscas.';
+      throw NotFoundFailure(msg);
+    }
+
+    final responseData = e.response?.data;
+    if (responseData is Map && responseData.containsKey('detail')) {
+      final detail = responseData['detail'];
+      if (detail is List && detail.isNotEmpty) {
+        final first = detail.first;
+        if (first is Map && first.containsKey('msg')) {
+          throw ServerFailure('${first['msg']} (${first['loc']?.last ?? ''})');
+        }
+      }
+      throw ServerFailure(detail.toString());
+    }
+
+    throw ServerFailure(
+      statusCode != null
+          ? 'Error del servidor backend ($statusCode)'
+          : (e.message ?? 'Error de conexión con FastAPI'),
+    );
+  }
+
+  // =========================================================================
+  // 1. GET /health (Público)
+  // =========================================================================
+
+  /// Consulta el estado del servicio y la versión del modelo de IA cargado.
+  Future<Map<String, dynamic>> getHealth() async {
+    try {
+      final response = await _dio.get(ApiEndpoints.health);
+      return Map<String, dynamic>.from(response.data);
+    } on DioException catch (e) {
+      _handleDioError(e);
+    } on Failure {
+      rethrow;
+    } catch (e) {
+      throw ServerFailure('Error al consultar /health: $e');
+    }
+  }
+
+  // =========================================================================
+  // 2. POST /diagnoses (Requiere Token)
+  // =========================================================================
+
+  /// Envía la imagen mediante multipart/form-data según el contrato:
+  /// - `file`: obligatorio (JPG, PNG o WEBP de hasta 10 MB).
+  /// - `crop_slug`: opcional (por defecto 'cafe').
+  /// - `plot_id`: opcional (UUID del lote si se escanea desde un muestreo).
+  /// - `latitude` y `longitude`: opcionales (ambos o ninguno).
+  Future<Map<String, dynamic>> createDiagnosis({
+    required File imageFile,
+    String cropSlug = 'cafe',
+    String? plotId,
+    double? latitude,
+    double? longitude,
+  }) async {
+    try {
+      // Validar tamaño máximo de 10 MB antes de subir
+      final fileSize = await imageFile.length();
+      if (fileSize > 10 * 1024 * 1024) {
+        throw const ServerFailure('La imagen supera los 10 MB permitidos.');
+      }
+
+      final fileName = imageFile.path.split(RegExp(r'[/\\]')).last;
+      final mediaType = _resolveMediaType(imageFile.path);
+
+      final multipartFile = await MultipartFile.fromFile(
+        imageFile.path,
+        filename: fileName,
+        contentType: mediaType,
+      );
+
+      final formMap = <String, dynamic>{
+        'file': multipartFile,
+        'crop_slug': cropSlug,
+      };
+
+      // Asocia la foto a un lote (sesión de muestreo)
+      if (plotId != null) {
+        formMap['plot_id'] = plotId;
+      }
+
+      // Latitud y longitud deben enviarse ambos o ninguno
+      if (latitude != null && longitude != null) {
+        formMap['latitude'] = latitude;
+        formMap['longitude'] = longitude;
+      }
+
+      final formData = FormData.fromMap(formMap);
+
+      final response = await _dio.post(ApiEndpoints.diagnoses, data: formData);
+
+      return Map<String, dynamic>.from(response.data);
+    } on DioException catch (e) {
+      _handleDioError(e);
+    } on Failure {
+      rethrow;
+    } catch (e) {
+      throw ServerFailure('Error al procesar el diagnóstico en FastAPI: $e');
+    }
+  }
+
+  // =========================================================================
+  // 3. GET /diagnoses (Requiere Token)
+  // =========================================================================
+
+  /// Lista los diagnósticos del usuario autenticado con paginación.
+  Future<List<Map<String, dynamic>>> getDiagnoses({
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    try {
+      final response = await _dio.get(
+        ApiEndpoints.diagnoses,
+        queryParameters: {'limit': limit, 'offset': offset},
+      );
+
+      final dynamic data = response.data;
+      if (data is List) {
+        return data
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .toList();
+      } else if (data is Map && data['items'] is List) {
+        return (data['items'] as List)
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .toList();
+      }
+      return [];
+    } on DioException catch (e) {
+      _handleDioError(e);
+    } on Failure {
+      rethrow;
+    } catch (e) {
+      throw ServerFailure('Error al obtener la lista de diagnósticos: $e');
+    }
+  }
+
+  // =========================================================================
+  // 4. GET /diagnoses/{diagnostico_id} (Requiere Token)
+  // =========================================================================
+
+  /// Obtiene un diagnóstico específico por su UUID.
+  Future<Map<String, dynamic>> getDiagnosisById(String diagnosticoId) async {
+    try {
+      final response = await _dio.get(
+        ApiEndpoints.diagnosisById(diagnosticoId),
+      );
+      return Map<String, dynamic>.from(response.data);
+    } on DioException catch (e) {
+      _handleDioError(e);
+    } on Failure {
+      rethrow;
+    } catch (e) {
+      throw ServerFailure('Error al obtener el diagnóstico $diagnosticoId: $e');
+    }
+  }
+
+  // =========================================================================
+  // 5. Método genérico (cultivos, lotes, muestreos)
+  // =========================================================================
+
+  /// Llamada HTTP genérica con el mismo manejo de errores y token.
+  /// Devuelve `response.data` tal cual (Map o List según el endpoint).
+  Future<dynamic> send(
+    String method,
+    String path, {
+    Object? data,
+    Map<String, dynamic>? query,
+  }) async {
+    try {
+      final response = await _dio.request(
+        path,
+        data: data,
+        queryParameters: query,
+        options: Options(method: method),
+      );
+      return response.data;
+    } on DioException catch (e) {
+      _handleDioError(e);
+    } on Failure {
+      rethrow;
+    } catch (e) {
+      throw ServerFailure('Error de comunicación con el servidor: $e');
+    }
+  }
+}
+</file>
+
+<file path="lib/core/network/api/api_endpoints.dart">
+import 'package:flutter/foundation.dart';
+
+/// Define los endpoints y la URL base para conectar con FastAPI.
+class ApiEndpoints {
+  ApiEndpoints._();
+
+  static const int port = 8000;
+
+  /// IP de tu PC en la red Wi-Fi (usar solo si desconectas el cable USB).
+  static const String localNetworkIp = '192.168.1.185';
+
+  /// URL base por defecto.
+  /// Con el cable USB conectado y `adb reverse tcp:8000 tcp:8000`,
+  /// `http://127.0.0.1:8000` conecta inmediatamente tanto en celular físico
+  /// como en la web o Linux desktop.
+  static String get defaultBaseUrl {
+    if (kIsWeb) {
+      return 'http://localhost:$port';
+    }
+    // Con 'adb reverse tcp:8000 tcp:8000' activo en tu celular,
+    // 127.0.0.1 se redirige directamente a tu computadora por USB.
+    return 'http://127.0.0.1:$port';
+  }
+
+  /// **GET /health** (Público)
+  /// Estado de la API y versión del modelo de IA.
+  static const String health = '/health';
+
+  /// **POST /diagnoses** (Requiere token)
+  /// Recibe una imagen y crea un diagnóstico ejecutando el pipeline de IA.
+  ///
+  /// **GET /diagnoses** (Requiere token)
+  /// Lista los diagnósticos del usuario autenticado (soporta `limit` y `offset`).
+  static const String diagnoses = '/diagnoses';
+
+  /// **GET /diagnoses/{diagnostico_id}** (Requiere token)
+  /// Obtiene un diagnóstico propio por su UUID.
+  static String diagnosisById(String diagnosticoId) => '/diagnoses/$diagnosticoId';
+}
+</file>
+
+<file path="lib/core/network/api/api_interceptors.dart">
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+import 'package:kroppi/core/network/supabase/supabase_client.dart' as app_supabase;
+
+/// Interceptor que inyecta automáticamente el token JWT de Supabase
+/// si el usuario ha iniciado sesión.
+class ApiAuthInterceptor extends Interceptor {
+  @override
+  void onRequest(
+    RequestOptions options,
+    RequestInterceptorHandler handler,
+  ) {
+    try {
+      final session = app_supabase.SupabaseClient.client.auth.currentSession;
+      if (session != null && session.accessToken.isNotEmpty) {
+        options.headers['Authorization'] = 'Bearer ${session.accessToken}';
+      }
+    } catch (_) {
+      // Si Supabase aún no está inicializado o falla, continúa la petición sin token
+    }
+    handler.next(options);
+  }
+}
+
+/// Interceptor para registrar peticiones y respuestas en consola durante desarrollo.
+class ApiLoggingInterceptor extends Interceptor {
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    if (kDebugMode) {
+      debugPrint('--> [FASTAPI REQUEST] ${options.method} ${options.uri}');
+      if (options.data != null && options.data is! FormData) {
+        debugPrint('    Data: ${options.data}');
+      }
+    }
+    handler.next(options);
+  }
+
+  @override
+  void onResponse(Response response, ResponseInterceptorHandler handler) {
+    if (kDebugMode) {
+      debugPrint('<-- [FASTAPI RESPONSE ${response.statusCode}] ${response.requestOptions.uri}');
+    }
+    handler.next(response);
+  }
+
+  @override
+  void onError(DioException err, ErrorInterceptorHandler handler) {
+    if (kDebugMode) {
+      debugPrint('<-- [FASTAPI ERROR ${err.response?.statusCode}] ${err.requestOptions.uri}');
+      debugPrint('    Message: ${err.message}');
+      if (err.response?.data != null) {
+        debugPrint('    Response Body: ${err.response?.data}');
+      }
+    }
+    handler.next(err);
+  }
+}
+</file>
+
+<file path="lib/core/network/api/fastapi_client.dart">
+import 'package:dio/dio.dart';
+import 'api_endpoints.dart';
+import 'api_interceptors.dart';
+
+/// Cliente HTTP centralizado para el backend de FastAPI (IA Local + Gemini).
+///
+/// Sigue el mismo patrón de inicialización y acceso que [SupabaseClient].
+class FastApiClient {
+  FastApiClient._();
+
+  static Dio? _instance;
+  static String _baseUrl = ApiEndpoints.defaultBaseUrl;
+
+  /// Inicializa el cliente Dio con opciones optimizadas para modelos de IA
+  /// y agrega los interceptores correspondientes.
+  static void init({
+    String? baseUrl,
+    Map<String, dynamic>? customHeaders,
+  }) {
+    if (baseUrl != null && baseUrl.isNotEmpty) {
+      _baseUrl = baseUrl;
+    } else {
+      _baseUrl = ApiEndpoints.defaultBaseUrl;
+    }
+
+    final options = BaseOptions(
+      baseUrl: _baseUrl,
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 45), // Tiempo amplio para inferencia de IA
+      sendTimeout: const Duration(seconds: 30), // Tiempo para subir imágenes
+      headers: {
+        'Accept': 'application/json',
+        ...?customHeaders,
+      },
+    );
+
+    _instance = Dio(options)
+      ..interceptors.addAll([
+        ApiAuthInterceptor(),
+        ApiLoggingInterceptor(),
+      ]);
+  }
+
+  /// Retorna la instancia configurada de [Dio].
+  ///
+  /// Si aún no se llamó a `init()`, se inicializa automáticamente con valores por defecto.
+  static Dio get client {
+    if (_instance == null) {
+      init();
+    }
+    return _instance!;
+  }
+
+  /// Permite actualizar la URL base en tiempo de ejecución (ej. desde configuración).
+  static void setBaseUrl(String newBaseUrl) {
+    _baseUrl = newBaseUrl;
+    if (_instance != null) {
+      _instance!.options.baseUrl = newBaseUrl;
+    }
+  }
+
+  /// URL base actual configurada en el cliente.
+  static String get baseUrl => _baseUrl;
 }
 </file>
 
@@ -5611,6 +6073,62 @@ class SocialAuthSection extends StatelessWidget {
 }
 </file>
 
+<file path="lib/features/crop_diagnosis/data/datasources/crop_diagnosis_remote_data_source.dart">
+import 'dart:io';
+import 'package:dio/dio.dart';
+import 'package:kroppi/core/network/api/fastapi_client.dart';
+import 'package:kroppi/core/network/api/services/ai_backend_service.dart';
+import '../models/crop_diagnosis_model.dart';
+
+/// Fuente de datos remota para el diagnóstico de cultivos conectada a FastAPI:
+/// - POST /diagnoses                   -> Crea diagnóstico con campo 'file' y orquesta las IAs
+/// - GET  /diagnoses                   -> Lista diagnósticos del usuario
+/// - GET  /diagnoses/{diagnostico_id}  -> Detalle por UUID
+class CropDiagnosisRemoteDataSource {
+  final AiBackendService _backendService;
+
+  CropDiagnosisRemoteDataSource({
+    AiBackendService? backendService,
+    Dio? dioClient,
+  }) : _backendService = backendService ??
+            AiBackendService(dio: dioClient ?? FastApiClient.client);
+
+  /// Envía la imagen a `POST /diagnoses` en el campo `file` (requiere token).
+  Future<CropDiagnosisModel> analyzeCropImage({
+    required File imageFile,
+    required String userId,
+    String? prompt,
+    String cropSlug = 'cafe',
+    double? latitude,
+    double? longitude,
+  }) async {
+    final responseMap = await _backendService.createDiagnosis(
+      imageFile: imageFile,
+      cropSlug: cropSlug,
+      latitude: latitude,
+      longitude: longitude,
+    );
+
+    return CropDiagnosisModel.fromJson(responseMap);
+  }
+
+  /// Obtiene un diagnóstico por su UUID desde `GET /diagnoses/{diagnostico_id}`.
+  Future<CropDiagnosisModel> getDiagnosisById(String diagnosticoId) async {
+    final responseMap = await _backendService.getDiagnosisById(diagnosticoId);
+    return CropDiagnosisModel.fromJson(responseMap);
+  }
+
+  /// Obtiene la lista de diagnósticos paginados desde `GET /diagnoses`.
+  Future<List<CropDiagnosisModel>> getDiagnoses({
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    final list = await _backendService.getDiagnoses(limit: limit, offset: offset);
+    return list.map(CropDiagnosisModel.fromJson).toList();
+  }
+}
+</file>
+
 <file path="lib/features/crop_diagnosis/data/models/crop_diagnosis_model.dart">
 import '../../domain/entities/crop_diagnosis.dart';
 
@@ -5620,22 +6138,75 @@ class CropDiagnosisModel extends CropDiagnosis {
     required super.userId,
     required super.imageUrl,
     required super.diseaseName,
+    super.scientificName,
     required super.confidence,
     required super.geminiRecommendations,
     required super.createdAt,
   });
 
   factory CropDiagnosisModel.fromJson(Map<String, dynamic> json) {
+    // 1. Nombre común de la enfermedad
+    String diseaseName = 'Planta sana';
+    if (json['ai_prediction'] is Map && json['ai_prediction']['disease_name'] != null) {
+      diseaseName = json['ai_prediction']['disease_name'].toString();
+    } else if (json['disease'] is Map && json['disease']['name'] != null) {
+      diseaseName = json['disease']['name'].toString();
+    } else if (json['disease_name'] != null) {
+      diseaseName = json['disease_name'].toString();
+    }
+
+    // 2. Nombre científico de la enfermedad (extraído de ai_prediction o disease)
+    String scientificName = 'No especificado';
+    if (json['ai_prediction'] is Map && json['ai_prediction']['scientific_name'] != null) {
+      scientificName = json['ai_prediction']['scientific_name'].toString();
+    } else if (json['disease'] is Map && json['disease']['scientific_name'] != null) {
+      scientificName = json['disease']['scientific_name'].toString();
+    } else if (json['scientific_name'] != null) {
+      scientificName = json['scientific_name'].toString();
+    }
+
+    // 3. Nivel de confianza
+    double confidence = 0.0;
+    if (json['ai_prediction'] is Map && json['ai_prediction']['confidence'] != null) {
+      confidence = (json['ai_prediction']['confidence'] as num).toDouble();
+    } else if (json['confidence'] != null) {
+      confidence = (json['confidence'] as num).toDouble();
+    }
+
+    // 4. Recomendaciones de Gemini
+    String recommendations = '';
+    final dynamic rawRec = (json['ai_prediction'] is Map)
+        ? json['ai_prediction']['recommendations']
+        : json['recommendations'];
+
+    if (rawRec is List && rawRec.isNotEmpty) {
+      recommendations = rawRec.join('\n\n');
+    } else if (rawRec != null && rawRec.toString().trim().isNotEmpty && rawRec != '[]') {
+      recommendations = rawRec.toString();
+    } else if (json['disease'] is Map && json['disease']['general_recommendations'] != null) {
+      final genRec = json['disease']['general_recommendations'];
+      if (genRec is List) {
+        recommendations = genRec.join('\n\n');
+      } else {
+        recommendations = genRec.toString();
+      }
+    }
+
+    // 5. Fecha de creación
+    DateTime createdAt = DateTime.now();
+    if (json['created_at'] != null) {
+      createdAt = DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now();
+    }
+
     return CropDiagnosisModel(
-      id: json['_id'] ?? json['id'] ?? '',
-      userId: json['user_id'] ?? '',
-      imageUrl: json['image_url'] ?? '',
-      diseaseName: json['disease_name'] ?? 'No identificado',
-      confidence: (json['confidence'] as num?)?.toDouble() ?? 0.0,
-      geminiRecommendations: json['recommendations'] ?? '',
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'])
-          : DateTime.now(),
+      id: (json['id'] ?? json['diagnostico_id'] ?? '').toString(),
+      userId: (json['user_id'] ?? '').toString(),
+      imageUrl: (json['image_url'] ?? '').toString(),
+      diseaseName: diseaseName,
+      scientificName: scientificName,
+      confidence: confidence,
+      geminiRecommendations: recommendations,
+      createdAt: createdAt,
     );
   }
 
@@ -5645,6 +6216,7 @@ class CropDiagnosisModel extends CropDiagnosis {
       'user_id': userId,
       'image_url': imageUrl,
       'disease_name': diseaseName,
+      'scientific_name': scientificName,
       'confidence': confidence,
       'recommendations': geminiRecommendations,
       'created_at': createdAt.toIso8601String(),
@@ -5654,71 +6226,40 @@ class CropDiagnosisModel extends CropDiagnosis {
 </file>
 
 <file path="lib/features/crop_diagnosis/data/repositories/crop_diagnosis_repository_impl.dart">
-import '../../domain/entities/crop_diagnosis.dart';
-import '../../domain/repositories/crop_diagnosis_repository.dart';
 import 'dart:io';
 import 'package:dio/dio.dart';
-
-import '../models/crop_diagnosis_model.dart';
+import '../../domain/entities/crop_diagnosis.dart';
+import '../../domain/repositories/crop_diagnosis_repository.dart';
+import '../datasources/crop_diagnosis_remote_data_source.dart';
 
 class CropDiagnosisRepositoryImpl implements CropDiagnosisRepository {
-  final Dio dioClient;
+  final CropDiagnosisRemoteDataSource remoteDataSource;
 
-  CropDiagnosisRepositoryImpl({required this.dioClient});
+  CropDiagnosisRepositoryImpl({
+    CropDiagnosisRemoteDataSource? remoteDataSource,
+    Dio? dioClient,
+  }) : remoteDataSource =
+           remoteDataSource ??
+           CropDiagnosisRemoteDataSource(dioClient: dioClient);
 
   @override
   Future<CropDiagnosis> analyzeCropImage({
     required File imageFile,
     required String userId,
     String? prompt,
+    String cropSlug = 'cafe',
+    String? plotId,
+    double? latitude,
+    double? longitude,
   }) async {
-    try {
-      final String fileName = imageFile.path.split('/').last;
-      final formData = FormData.fromMap({
-        'user_id': userId,
-        'prompt': prompt ?? '',
-        'image': await MultipartFile.fromFile(
-          imageFile.path,
-          filename: fileName,
-        ),
-      });
-
-      final response = await dioClient.post(
-        '/api/v1/diagnosis/analyze',
-        data: formData,
-      );
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        // Parseamos la respuesta con el Model y lo retornamos como Entity
-        return CropDiagnosisModel.fromJson(response.data);
-      } else {
-        throw Exception('Error en el servidor: ${response.statusCode}');
-      }
-    } on DioException catch (e) {
-      throw Exception('Error de red al analizar la imagen: ${e.message}');
-    } catch (e) {
-      throw Exception('Error inesperado: $e');
-    }
-  }
-
-  @override
-  Future<List<CropDiagnosis>> getDiagnosisHistory({
-    required String userId,
-  }) async {
-    try {
-      final response = await dioClient.get('/api/v1/diagnosis/history/$userId');
-
-      if (response.statusCode == 200) {
-        final List<dynamic> listJson = response.data;
-        return listJson
-            .map((json) => CropDiagnosisModel.fromJson(json))
-            .toList();
-      } else {
-        throw Exception('Error al obtener el historial');
-      }
-    } catch (e) {
-      throw Exception('Error al conectar con la base de datos: $e');
-    }
+    return await remoteDataSource.analyzeCropImage(
+      imageFile: imageFile,
+      userId: userId,
+      prompt: prompt,
+      cropSlug: cropSlug,
+      latitude: latitude,
+      longitude: longitude,
+    );
   }
 }
 </file>
@@ -5731,6 +6272,7 @@ class CropDiagnosis extends Equatable {
   final String userId;
   final String imageUrl;
   final String diseaseName;
+  final String scientificName;
   final double confidence;
   final String geminiRecommendations;
   final DateTime createdAt;
@@ -5740,6 +6282,7 @@ class CropDiagnosis extends Equatable {
     required this.userId,
     required this.imageUrl,
     required this.diseaseName,
+    this.scientificName = 'No especificado',
     required this.confidence,
     required this.geminiRecommendations,
     required this.createdAt,
@@ -5751,6 +6294,7 @@ class CropDiagnosis extends Equatable {
     userId,
     imageUrl,
     diseaseName,
+    scientificName,
     confidence,
     geminiRecommendations,
     createdAt,
@@ -5768,9 +6312,11 @@ abstract class CropDiagnosisRepository {
     required File imageFile,
     required String userId,
     String? prompt,
+    String cropSlug = 'cafe',
+    String? plotId,
+    double? latitude,
+    double? longitude,
   });
-
-  Future<List<CropDiagnosis>> getDiagnosisHistory({required String userId});
 }
 </file>
 
@@ -5789,11 +6335,19 @@ class AnalyzeCropImageUsecase {
     required File imageFile,
     required String userId,
     String? prompt,
+    String cropSlug = 'cafe',
+    String? plotId,
+    double? latitude,
+    double? longitude,
   }) async {
     return await repository.analyzeCropImage(
       imageFile: imageFile,
       userId: userId,
       prompt: prompt,
+      cropSlug: cropSlug,
+      plotId: plotId,
+      latitude: latitude,
+      longitude: longitude,
     );
   }
 }
@@ -5824,6 +6378,11 @@ class DiagnosisBloc extends Bloc<DiagnosisEvent, DiagnosisState> {
       final result = await analyzeCropImageUseCase(
         imageFile: event.imageFile,
         userId: event.userId,
+        prompt: event.prompt,
+        cropSlug: event.cropSlug,
+        plotId: event.plotId,
+        latitude: event.latitude,
+        longitude: event.longitude,
       );
       emit(DiagnosisSuccessState(result: result));
     } catch (e) {
@@ -5842,11 +6401,19 @@ class AnalyzeImageSubmittedEvent extends DiagnosisEvent {
   final File imageFile;
   final String userId;
   final String? prompt;
+  final String cropSlug;
+  final String? plotId;
+  final double? latitude;
+  final double? longitude;
 
   AnalyzeImageSubmittedEvent({
     required this.imageFile,
     required this.userId,
     this.prompt,
+    this.cropSlug = 'cafe',
+    this.plotId,
+    this.latitude,
+    this.longitude,
   });
 }
 </file>
@@ -5978,6 +6545,19 @@ class DiagnosisScreen extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+                      if (state.result.scientificName.isNotEmpty &&
+                          state.result.scientificName != 'No especificado') ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Nombre científico: ${state.result.scientificName}',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontStyle: FontStyle.italic,
+                            color: Colors.teal,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       Text(
                         'Confianza: ${(state.result.confidence * 100).toStringAsFixed(1)}%',
@@ -5995,7 +6575,12 @@ class DiagnosisScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text(state.result.geminiRecommendations),
+                      Text(
+                        state.result.geminiRecommendations.isNotEmpty
+                            ? state.result.geminiRecommendations
+                            : 'No se generaron recomendaciones adicionales.',
+                        style: const TextStyle(fontSize: 15, height: 1.4),
+                      ),
                     ],
                   ),
                 ),
@@ -6058,7 +6643,7 @@ class ImagePickerService {
 }
 </file>
 
-<file path="lib/features/crops/domain/entities/crop.dart">
+<file path="lib/features/guide/domain/entities/crop.dart">
 import 'package:kroppi/core/constants/app_assets.dart';
 
 class Crop {
@@ -6209,11 +6794,11 @@ class AppCrops {
 }
 </file>
 
-<file path="lib/features/crops/presentation/screens/crop_detail_screen.dart">
+<file path="lib/features/guide/presentation/screens/crop_detail_screen.dart">
 import 'package:flutter/material.dart';
 import 'package:kroppi/core/constants/app_colors.dart';
 import 'package:kroppi/core/constants/app_strings.dart';
-import 'package:kroppi/features/crops/domain/entities/crop.dart';
+import 'package:kroppi/features/guide/domain/entities/crop.dart';
 import 'package:kroppi/core/widgets/bullet_list.dart';
 import 'package:kroppi/core/widgets/crop_visual.dart';
 
@@ -6352,15 +6937,15 @@ class _Section extends StatelessWidget {
 }
 </file>
 
-<file path="lib/features/crops/presentation/screens/crops_screen.dart">
+<file path="lib/features/guide/presentation/screens/crops_screen.dart">
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kroppi/core/constants/app_colors.dart';
 import 'package:kroppi/core/constants/app_strings.dart';
-import 'package:kroppi/features/crops/domain/entities/crop.dart';
+import 'package:kroppi/features/guide/domain/entities/crop.dart';
 import 'package:kroppi/navigation/app_routes.dart';
-import 'package:kroppi/features/crops/presentation/widgets/crop_card.dart';
-import 'package:kroppi/features/crops/presentation/widgets/crop_search_field.dart';
+import 'package:kroppi/features/guide/presentation/widgets/crop_card.dart';
+import 'package:kroppi/features/guide/presentation/widgets/crop_search_field.dart';
 
 class CropsScreen extends StatefulWidget {
   const CropsScreen({super.key});
@@ -6507,11 +7092,11 @@ class _CropsScreenState extends State<CropsScreen> {
 }
 </file>
 
-<file path="lib/features/crops/presentation/widgets/crop_card.dart">
+<file path="lib/features/guide/presentation/widgets/crop_card.dart">
 import 'package:flutter/material.dart';
 import 'package:kroppi/core/constants/app_colors.dart';
 import 'package:kroppi/core/constants/app_crop_visuals.dart';
-import 'package:kroppi/features/crops/domain/entities/crop.dart';
+import 'package:kroppi/features/guide/domain/entities/crop.dart';
 
 /// Tarjeta vertical de un cultivo: foto arriba, insignia circular con el
 /// ícono del cultivo, nombre, enfermedades comunes y flecha.
@@ -6690,7 +7275,7 @@ class _CropPhoto extends StatelessWidget {
 }
 </file>
 
-<file path="lib/features/crops/presentation/widgets/crop_search_field.dart">
+<file path="lib/features/guide/presentation/widgets/crop_search_field.dart">
 import 'package:flutter/material.dart';
 import 'package:kroppi/core/constants/app_colors.dart';
 import 'package:kroppi/core/constants/app_strings.dart';
@@ -6753,6 +7338,137 @@ class CropSearchField extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+</file>
+
+<file path="lib/features/history/data/datasources/history_remote_data_source.dart">
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../models/diagnosis_record_model.dart';
+
+class HistoryRemoteDataSource {
+  const HistoryRemoteDataSource(this._client);
+
+  final SupabaseClient _client;
+
+  static const _select = '''
+  id, image_url, created_at, ai_prediction, predicted_label, confidence,
+  recommendations, plot_id,
+  crop_type:crop_types ( id, name, slug )''';
+
+  String get _userId {
+    final id = _client.auth.currentUser?.id;
+    if (id == null) {
+      throw const AuthException('Tu sesión expiró. Inicia sesión de nuevo.');
+    }
+    return id;
+  }
+
+  /// Lista de diagnósticos del usuario, del más reciente al más antiguo.
+  Future<List<DiagnosisRecordModel>> getHistory({
+    int from = 0,
+    int pageSize = 20,
+  }) async {
+    final rows = await _client
+        .from('diagnostics')
+        .select(_select)
+        .eq('user_id', _userId)
+        .order('created_at', ascending: false)
+        .range(from, from + pageSize - 1);
+
+    return rows.map(DiagnosisRecordModel.fromJson).toList();
+  }
+
+  /// Un diagnóstico por id, o null si no existe o no es del usuario.
+  Future<DiagnosisRecordModel?> getById(String id) async {
+    final row = await _client
+        .from('diagnostics')
+        .select(_select)
+        .eq('id', id)
+        .eq('user_id', _userId)
+        .maybeSingle();
+
+    return row == null ? null : DiagnosisRecordModel.fromJson(row);
+  }
+}
+</file>
+
+<file path="lib/features/history/data/models/diagnosis_record_model.dart">
+import '../../domain/entities/diagnosis_record.dart';
+
+class DiagnosisRecordModel extends DiagnosisRecord {
+  const DiagnosisRecordModel({
+    required super.id,
+    required super.cropId,
+    required super.cropName,
+    required super.pathogen,
+    required super.pathogenType,
+    required super.date,
+    required super.confidence,
+    required super.symptoms,
+    required super.recommendations,
+    this.imageUrl,
+  });
+
+  final String? imageUrl;
+
+  factory DiagnosisRecordModel.fromJson(Map<String, dynamic> json) {
+    final crop = json['crop_type'] as Map<String, dynamic>? ?? {};
+    final ai = json['ai_prediction'] as Map<String, dynamic>? ?? {};
+
+    List<String> strings(dynamic v) =>
+        (v as List?)?.map((e) => e.toString()).toList() ?? const [];
+
+    final sci = ai['scientific_name']?.toString();
+    final pathogen = (sci != null && sci != 'No especificado')
+        ? sci
+        : (ai['disease_name']?.toString() ?? 'No identificado');
+
+    final recs = strings(json['recommendations']);
+
+    return DiagnosisRecordModel(
+      id: json['id'].toString(),
+      cropId: crop['slug']?.toString() ?? 'otros',
+      cropName: crop['name']?.toString() ?? 'Cultivo',
+      pathogen: pathogen,
+      pathogenType: ai['pathogen_type']?.toString() ?? '',
+      date:
+          DateTime.tryParse(json['created_at']?.toString() ?? '')?.toLocal() ??
+          DateTime.now(),
+      confidence:
+          ((((json['confidence'] ?? ai['confidence']) as num?) ?? 0) * 100)
+              .round(),
+      symptoms: strings(ai['symptoms']),
+      recommendations: recs,
+      imageUrl: json['image_url']?.toString(),
+    );
+  }
+}
+</file>
+
+<file path="lib/features/history/data/repositories/history_repository_impl.dart">
+import 'package:kroppi/core/errors/guard.dart';
+
+import '../../domain/entities/diagnosis_record.dart';
+import '../../domain/repositories/history_repository.dart';
+import '../datasources/history_remote_data_source.dart';
+
+class HistoryRepositoryImpl implements HistoryRepository {
+  const HistoryRepositoryImpl(this._remoteDataSource);
+
+  final HistoryRemoteDataSource _remoteDataSource;
+
+  @override
+  Future<List<DiagnosisRecord>> getHistory({int from = 0, int pageSize = 20}) {
+    return guardCall<List<DiagnosisRecord>>(
+      () => _remoteDataSource.getHistory(from: from, pageSize: pageSize),
+    );
+  }
+
+  @override
+  Future<DiagnosisRecord?> getById(String id) {
+    return guardCall<DiagnosisRecord?>(() => _remoteDataSource.getById(id));
   }
 }
 </file>
@@ -6870,19 +7586,117 @@ class SampleDiagnoses {
 }
 </file>
 
+<file path="lib/features/history/domain/repositories/history_repository.dart">
+import '../entities/diagnosis_record.dart';
+
+abstract interface class HistoryRepository {
+  Future<List<DiagnosisRecord>> getHistory({int from = 0, int pageSize = 20});
+
+  Future<DiagnosisRecord?> getById(String id);
+}
+</file>
+
+<file path="lib/features/history/domain/usecases/get_diagnosis_by_id_usecase.dart">
+import '../entities/diagnosis_record.dart';
+import '../repositories/history_repository.dart';
+
+class GetDiagnosisByIdUsecase {
+  const GetDiagnosisByIdUsecase(this._repository);
+
+  final HistoryRepository _repository;
+
+  Future<DiagnosisRecord?> call(String id) => _repository.getById(id);
+}
+</file>
+
+<file path="lib/features/history/domain/usecases/get_diagnosis_history_usecase.dart">
+import '../entities/diagnosis_record.dart';
+import '../repositories/history_repository.dart';
+
+class GetDiagnosisHistoryUsecase {
+  const GetDiagnosisHistoryUsecase(this._repository);
+
+  final HistoryRepository _repository;
+
+  Future<List<DiagnosisRecord>> call({int from = 0, int pageSize = 20}) {
+    return _repository.getHistory(from: from, pageSize: pageSize);
+  }
+}
+</file>
+
+<file path="lib/features/history/presentation/cubit/history_cubit.dart">
+import 'package:equatable/equatable.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../domain/entities/diagnosis_record.dart';
+import '../../domain/usecases/get_diagnosis_history_usecase.dart';
+
+enum HistoryStatus { initial, loading, success, failure }
+
+class HistoryState extends Equatable {
+  const HistoryState({
+    this.status = HistoryStatus.initial,
+    this.records = const [],
+    this.message,
+  });
+
+  final HistoryStatus status;
+
+  /// Diagnósticos cargados.
+  final List<DiagnosisRecord> records;
+
+  /// Mensaje de error (solo en `failure`).
+  final String? message;
+
+  bool get isLoading => status == HistoryStatus.loading;
+  bool get isEmpty => status == HistoryStatus.success && records.isEmpty;
+
+  @override
+  List<Object?> get props => [status, records, message];
+}
+
+class HistoryCubit extends Cubit<HistoryState> {
+  HistoryCubit(this._getHistory) : super(const HistoryState());
+
+  final GetDiagnosisHistoryUsecase _getHistory;
+
+  Future<void> load() async {
+    if (state.isLoading) return;
+    emit(HistoryState(status: HistoryStatus.loading, records: state.records));
+    try {
+      final records = await _getHistory();
+      emit(HistoryState(status: HistoryStatus.success, records: records));
+    } catch (error) {
+      emit(
+        HistoryState(
+          status: HistoryStatus.failure,
+          records: state.records,
+          message: error.toString(),
+        ),
+      );
+    }
+  }
+}
+</file>
+
 <file path="lib/features/history/presentation/screens/diagnosis_detail_screen.dart">
 import 'package:flutter/material.dart';
 import 'package:kroppi/features/history/domain/entities/diagnosis_record.dart';
 import 'package:kroppi/features/history/presentation/widgets/diagnosis_result_view.dart';
 
 class DiagnosisDetailScreen extends StatelessWidget {
-  const DiagnosisDetailScreen({super.key, required this.diagnosisId});
+  const DiagnosisDetailScreen({
+    super.key,
+    required this.diagnosisId,
+    this.record,
+  });
 
   final String diagnosisId;
+  final DiagnosisRecord? record;
 
   @override
   Widget build(BuildContext context) {
-    final record = SampleDiagnoses.byId(diagnosisId);
+    final record = this.record;
 
     if (record == null) {
       return Scaffold(
@@ -6915,14 +7729,16 @@ class DiagnosisDetailScreen extends StatelessWidget {
 
 <file path="lib/features/history/presentation/screens/history_screen.dart">
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:kroppi/core/constants/app_colors.dart';
 import 'package:kroppi/core/constants/app_strings.dart';
-import 'package:kroppi/features/history/domain/entities/diagnosis_record.dart';
 import 'package:kroppi/core/widgets/app_search_bar.dart';
 import 'package:kroppi/core/widgets/empty_state.dart';
 import 'package:kroppi/core/widgets/filter_chip_button.dart';
+import 'package:kroppi/features/history/domain/entities/diagnosis_record.dart';
+import 'package:kroppi/features/history/presentation/cubit/history_cubit.dart';
 import 'package:kroppi/features/history/presentation/widgets/diagnosis_history_card.dart';
-import 'package:go_router/go_router.dart';
 import 'package:kroppi/navigation/app_routes.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -6943,16 +7759,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
     super.dispose();
   }
 
-  List<String> get _cropFilters {
-    final crops = SampleDiagnoses.all.map((e) => e.cropName).toSet().toList();
+  List<String> _cropFilters(List<DiagnosisRecord> records) {
+    final crops = records.map((e) => e.cropName).toSet().toList();
     return [AppStrings.filterAll, ...crops];
   }
 
-  List<DiagnosisRecord> get _filtered {
-    return SampleDiagnoses.all.where((record) {
+  List<DiagnosisRecord> _filtered(
+    List<DiagnosisRecord> records,
+    String selectedCrop,
+  ) {
+    return records.where((record) {
       final matchesCrop =
-          _selectedCrop == AppStrings.filterAll ||
-          record.cropName == _selectedCrop;
+          selectedCrop == AppStrings.filterAll ||
+          record.cropName == selectedCrop;
       final matchesQuery =
           _query.isEmpty ||
           record.pathogen.toLowerCase().contains(_query) ||
@@ -6963,75 +7782,153 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final results = _filtered;
-
     return Scaffold(
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                AppStrings.historyTitle,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.primaryDark,
-                ),
-              ),
-              const SizedBox(height: 16),
-              AppSearchBar(
-                controller: _searchController,
-                hint: AppStrings.searchHint,
-                onChanged: (value) =>
-                    setState(() => _query = value.toLowerCase()),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 40,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _cropFilters.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    final crop = _cropFilters[index];
-                    return FilterChipButton(
-                      label: crop,
-                      selected: _selectedCrop == crop,
-                      onTap: () => setState(() => _selectedCrop = crop),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: results.isEmpty
-                    ? const SingleChildScrollView(
-                        child: EmptyState(
-                          icon: Icons.history_rounded,
-                          title: AppStrings.emptyHistoryTitle,
-                          subtitle: AppStrings.emptyHistorySubtitle,
-                        ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.only(top: 8, bottom: 24),
-                        itemCount: results.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 10),
-                        itemBuilder: (context, index) {
-                          final record = results[index];
-                          return DiagnosisHistoryCard(
-                            record: record,
-                            onTap: () => context.push(
-                              AppRoutes.diagnosisDetailPath(record.id),
-                            ),
-                          );
-                        },
-                      ),
-              ),
-            ],
+          child: BlocBuilder<HistoryCubit, HistoryState>(
+            builder: (context, state) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    AppStrings.historyTitle,
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primaryDark,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(child: _buildBody(context, state)),
+                ],
+              );
+            },
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context, HistoryState state) {
+    if (state.status == HistoryStatus.failure) {
+      return _ErrorView(
+        message: state.message ?? 'No se pudo cargar el historial.',
+        onRetry: () => context.read<HistoryCubit>().load(),
+      );
+    }
+
+    if (state.records.isEmpty && state.status != HistoryStatus.success) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (state.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: () => context.read<HistoryCubit>().load(),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            EmptyState(
+              icon: Icons.history_rounded,
+              title: AppStrings.emptyHistoryTitle,
+              subtitle: AppStrings.emptyHistorySubtitle,
+            ),
+          ],
+        ),
+      );
+    }
+
+    final filters = _cropFilters(state.records);
+    final selected = filters.contains(_selectedCrop)
+        ? _selectedCrop
+        : AppStrings.filterAll;
+    final results = _filtered(state.records, selected);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AppSearchBar(
+          controller: _searchController,
+          hint: AppStrings.searchHint,
+          onChanged: (value) => setState(() => _query = value.toLowerCase()),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 40,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: filters.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final crop = filters[index];
+              return FilterChipButton(
+                label: crop,
+                selected: selected == crop,
+                onTap: () => setState(() => _selectedCrop = crop),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () => context.read<HistoryCubit>().load(),
+            child: results.isEmpty
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: const [
+                      EmptyState(
+                        icon: Icons.search_off_rounded,
+                        title: 'Sin resultados',
+                        subtitle: 'Prueba con otra búsqueda o filtro.',
+                      ),
+                    ],
+                  )
+                : ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.only(top: 8, bottom: 24),
+                    itemCount: results.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final record = results[index];
+                      return DiagnosisHistoryCard(
+                        record: record,
+                        onTap: () => context.push(
+                          AppRoutes.diagnosisDetailPath(record.id),
+                          extra: record,
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ErrorView extends StatelessWidget {
+  const _ErrorView({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.cloud_off_rounded, size: 40, color: AppColors.error),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton(onPressed: onRetry, child: const Text('Reintentar')),
+        ],
       ),
     );
   }
@@ -7871,6 +8768,1660 @@ class _DecorPainter extends CustomPainter {
 }
 </file>
 
+<file path="lib/features/my_crops/data/datasources/my_crops_remote_data_source.dart">
+import 'package:kroppi/core/network/api/services/ai_backend_service.dart';
+import 'package:kroppi/features/my_crops/domain/entities/my_crop.dart';
+import 'package:kroppi/features/my_crops/domain/entities/plot.dart';
+import 'package:kroppi/features/my_crops/domain/entities/plot_sample.dart';
+
+class MyCropsRemoteDataSource {
+  MyCropsRemoteDataSource(this._api);
+
+  final AiBackendService _api;
+
+  String _date(DateTime d) => d.toIso8601String().split('T').first;
+
+  // ---------------- Cultivos ----------------
+
+  Future<List<MyCrop>> getCrops() async {
+    final r = await _api.send('GET', '/crops') as List;
+    return r.map((e) => MyCrop.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Catálogo para el selector del formulario: [{id, name, slug, ...}]
+  Future<List<Map<String, dynamic>>> getCropTypes() async {
+    final r = await _api.send('GET', '/crop-types') as List;
+    return r.cast<Map<String, dynamic>>();
+  }
+
+  Future<void> createCrop({
+    required String cropTypeId,
+    required String name,
+    DateTime? plantedAt,
+    DateTime? expectedHarvestAt,
+  }) async {
+    await _api.send(
+      'POST',
+      '/crops',
+      data: {
+        'crop_type_id': cropTypeId,
+        'name': name,
+        'planted_at': ?(plantedAt == null ? null : _date(plantedAt)),
+        'expected_harvest_at': ?(expectedHarvestAt == null
+            ? null
+            : _date(expectedHarvestAt)),
+      },
+    );
+  }
+
+  Future<void> archiveCrop(String cropId) async {
+    await _api.send('DELETE', '/crops/$cropId');
+  }
+
+  // ---------------- Lotes ----------------
+
+  Future<List<Plot>> getPlots(String cropId) async {
+    final r = await _api.send('GET', '/crops/$cropId/plots') as List;
+    return r.map((e) => Plot.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> createPlot(
+    String cropId, {
+    required String name,
+    required double areaHa,
+    int? plantCount,
+    String? variety,
+  }) async {
+    await _api.send(
+      'POST',
+      '/crops/$cropId/plots',
+      data: {
+        'name': name,
+        'area_ha': areaHa,
+        'plant_count': ?plantCount,
+        'variety': ?((variety == null || variety.isEmpty) ? null : variety),
+      },
+    );
+  }
+
+  Future<PlotDetail> getPlotDetail(String plotId) async {
+    final r = await _api.send('GET', '/plots/$plotId');
+    return PlotDetail.fromJson(r as Map<String, dynamic>);
+  }
+
+  // ---------------- Muestreos ----------------
+
+  Future<SampleResult> closeSample(
+    String plotId,
+    List<String> diagnosticIds,
+  ) async {
+    final r = await _api.send(
+      'POST',
+      '/plots/$plotId/samples',
+      data: {'diagnostic_ids': diagnosticIds},
+    );
+    return SampleResult.fromJson(r as Map<String, dynamic>);
+  }
+
+  Future<List<PlotSample>> getSamples(String plotId) async {
+    final r = await _api.send('GET', '/plots/$plotId/samples') as List;
+    return r
+        .map((e) => PlotSample.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+}
+</file>
+
+<file path="lib/features/my_crops/domain/entities/my_crop.dart">
+import 'package:equatable/equatable.dart';
+
+class MyCrop extends Equatable {
+  const MyCrop({
+    required this.id,
+    required this.name,
+    required this.typeId,
+    required this.typeName,
+    required this.typeSlug,
+    required this.totalPlots,
+    required this.alertPlots,
+    required this.dangerPlots,
+    required this.totalAreaHa,
+  });
+
+  final String id;
+  final String name;
+  final String typeId;
+  final String typeName;
+  final String typeSlug;
+  final int totalPlots;
+  final int alertPlots;
+  final int dangerPlots;
+  final double totalAreaHa;
+
+  factory MyCrop.fromJson(Map<String, dynamic> j) {
+    final t = j['crop_type'] as Map<String, dynamic>;
+    final s = j['plots_summary'] as Map<String, dynamic>;
+    return MyCrop(
+      id: j['id'] as String,
+      name: j['name'] as String,
+      typeId: t['id'] as String,
+      typeName: t['name'] as String,
+      typeSlug: (t['slug'] as String?) ?? '',
+      totalPlots: s['total'] as int,
+      alertPlots: s['alert'] as int,
+      dangerPlots: s['danger'] as int,
+      totalAreaHa: (s['total_area_ha'] as num).toDouble(),
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+    id,
+    name,
+    typeId,
+    totalPlots,
+    alertPlots,
+    dangerPlots,
+    totalAreaHa,
+  ];
+}
+</file>
+
+<file path="lib/features/my_crops/domain/entities/plot_sample.dart">
+import 'package:equatable/equatable.dart';
+import 'plot.dart';
+
+/// Resultado de cerrar un muestreo (POST /plots/{id}/samples).
+class SampleResult extends Equatable {
+  const SampleResult({
+    required this.evaluated,
+    required this.affected,
+    required this.discarded,
+    required this.incidencePct,
+    required this.status,
+  });
+
+  final int evaluated;
+  final int affected;
+  final int discarded;
+  final double incidencePct;
+  final PlotStatus status;
+
+  factory SampleResult.fromJson(Map<String, dynamic> j) => SampleResult(
+    evaluated: j['plants_evaluated'] as int,
+    affected: j['plants_affected'] as int,
+    discarded: (j['discarded'] as int?) ?? 0,
+    incidencePct: (j['incidence_pct'] as num).toDouble(),
+    status: PlotStatus.parse(j['status'] as String?),
+  );
+
+  @override
+  List<Object?> get props => [
+    evaluated,
+    affected,
+    discarded,
+    incidencePct,
+    status,
+  ];
+}
+
+/// Un punto del historial (GET /plots/{id}/samples), para la gráfica.
+class PlotSample extends Equatable {
+  const PlotSample({
+    required this.sampledAt,
+    required this.evaluated,
+    required this.affected,
+    required this.incidencePct,
+  });
+
+  final DateTime sampledAt;
+  final int evaluated;
+  final int affected;
+  final double incidencePct;
+
+  factory PlotSample.fromJson(Map<String, dynamic> j) => PlotSample(
+    sampledAt: DateTime.parse(j['sampled_at'] as String).toLocal(),
+    evaluated: j['plants_evaluated'] as int,
+    affected: j['plants_affected'] as int,
+    incidencePct: (j['incidence_pct'] as num).toDouble(),
+  );
+
+  @override
+  List<Object?> get props => [sampledAt, evaluated, affected, incidencePct];
+}
+</file>
+
+<file path="lib/features/my_crops/domain/entities/plot.dart">
+import 'package:equatable/equatable.dart';
+
+enum PlotStatus {
+  healthy,
+  alert,
+  danger;
+
+  static PlotStatus parse(String? v) => switch (v) {
+    'DANGER' => danger,
+    'ALERT' => alert,
+    _ => healthy,
+  };
+}
+
+class Plot extends Equatable {
+  const Plot({
+    required this.id,
+    required this.cropId,
+    required this.name,
+    required this.areaHa,
+    required this.status,
+    this.plantCount,
+    this.variety,
+    this.lastSampledAt,
+  });
+
+  final String id;
+  final String cropId;
+  final String name;
+  final double areaHa;
+  final int? plantCount;
+  final String? variety;
+  final PlotStatus status;
+  final DateTime? lastSampledAt;
+
+  factory Plot.fromJson(Map<String, dynamic> j) => Plot(
+    id: j['id'] as String,
+    cropId: j['crop_id'] as String,
+    name: j['name'] as String,
+    areaHa: (j['area_ha'] as num).toDouble(),
+    plantCount: j['plant_count'] as int?,
+    variety: j['variety'] as String?,
+    status: PlotStatus.parse(j['status'] as String?),
+    lastSampledAt: j['last_sampled_at'] == null
+        ? null
+        : DateTime.tryParse(j['last_sampled_at'] as String)?.toLocal(),
+  );
+
+  @override
+  List<Object?> get props => [
+    id,
+    name,
+    areaHa,
+    plantCount,
+    variety,
+    status,
+    lastSampledAt,
+  ];
+}
+
+/// Respuesta de GET /plots/{id}: el lote más datos de su cultivo y umbrales.
+class PlotDetail extends Equatable {
+  const PlotDetail({
+    required this.plot,
+    required this.cropName,
+    required this.cropSlug,
+    required this.alertPct,
+    required this.dangerPct,
+    this.lastIncidencePct,
+  });
+
+  final Plot plot;
+  final String cropName;
+  final String cropSlug;
+  final double alertPct;
+  final double dangerPct;
+  final double? lastIncidencePct;
+
+  factory PlotDetail.fromJson(Map<String, dynamic> j) {
+    final type = j['crop_type'] as Map<String, dynamic>;
+    final crop = j['crop'] as Map<String, dynamic>;
+    final last = j['last_sample'] as Map<String, dynamic>?;
+    return PlotDetail(
+      plot: Plot.fromJson(j),
+      cropName: crop['name'] as String,
+      cropSlug: (type['slug'] as String?) ?? 'cafe',
+      alertPct: (type['alert_threshold_pct'] as num).toDouble(),
+      dangerPct: (type['danger_threshold_pct'] as num).toDouble(),
+      lastIncidencePct: (last?['incidence_pct'] as num?)?.toDouble(),
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+    plot,
+    cropName,
+    cropSlug,
+    alertPct,
+    dangerPct,
+    lastIncidencePct,
+  ];
+}
+</file>
+
+<file path="lib/features/my_crops/presentation/cubit/my_crops_cubit.dart">
+import 'package:equatable/equatable.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:kroppi/features/my_crops/data/datasources/my_crops_remote_data_source.dart';
+import 'package:kroppi/features/my_crops/domain/entities/my_crop.dart';
+
+enum MyCropsStatus { initial, loading, success, failure }
+
+class MyCropsState extends Equatable {
+  const MyCropsState({
+    this.status = MyCropsStatus.initial,
+    this.crops = const [],
+    this.message,
+  });
+
+  final MyCropsStatus status;
+  final List<MyCrop> crops;
+  final String? message;
+
+  bool get isEmpty => status == MyCropsStatus.success && crops.isEmpty;
+
+  @override
+  List<Object?> get props => [status, crops, message];
+}
+
+class MyCropsCubit extends Cubit<MyCropsState> {
+  MyCropsCubit(this._source) : super(const MyCropsState());
+
+  final MyCropsRemoteDataSource _source;
+
+  Future<void> load() async {
+    if (state.status == MyCropsStatus.loading) return;
+    emit(MyCropsState(status: MyCropsStatus.loading, crops: state.crops));
+    try {
+      final crops = await _source.getCrops();
+      emit(MyCropsState(status: MyCropsStatus.success, crops: crops));
+    } catch (e) {
+      emit(
+        MyCropsState(
+          status: MyCropsStatus.failure,
+          crops: state.crops,
+          message: e.toString(),
+        ),
+      );
+    }
+  }
+}
+</file>
+
+<file path="lib/features/my_crops/presentation/cubit/plot_detail_cubit.dart">
+import 'package:equatable/equatable.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:kroppi/features/my_crops/data/datasources/my_crops_remote_data_source.dart';
+import 'package:kroppi/features/my_crops/domain/entities/plot.dart';
+import 'package:kroppi/features/my_crops/domain/entities/plot_sample.dart';
+
+enum PlotDetailStatus { initial, loading, success, failure }
+
+class PlotDetailState extends Equatable {
+  const PlotDetailState({
+    this.status = PlotDetailStatus.initial,
+    this.detail,
+    this.samples = const [],
+    this.message,
+  });
+
+  final PlotDetailStatus status;
+  final PlotDetail? detail;
+  final List<PlotSample> samples; // cronológico, listo para graficar
+  final String? message;
+
+  @override
+  List<Object?> get props => [status, detail, samples, message];
+}
+
+class PlotDetailCubit extends Cubit<PlotDetailState> {
+  PlotDetailCubit(this._source, this.plotId) : super(const PlotDetailState());
+
+  final MyCropsRemoteDataSource _source;
+  final String plotId;
+
+  Future<void> load() async {
+    if (state.status == PlotDetailStatus.loading) return;
+    emit(
+      PlotDetailState(
+        status: PlotDetailStatus.loading,
+        detail: state.detail,
+        samples: state.samples,
+      ),
+    );
+    try {
+      final results = await Future.wait([
+        _source.getPlotDetail(plotId),
+        _source.getSamples(plotId),
+      ]);
+      emit(
+        PlotDetailState(
+          status: PlotDetailStatus.success,
+          detail: results[0] as PlotDetail,
+          samples: results[1] as List<PlotSample>,
+        ),
+      );
+    } catch (e) {
+      emit(
+        PlotDetailState(
+          status: PlotDetailStatus.failure,
+          detail: state.detail,
+          samples: state.samples,
+          message: e.toString(),
+        ),
+      );
+    }
+  }
+}
+</file>
+
+<file path="lib/features/my_crops/presentation/screens/crop_detail_screen.dart">
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/core/widgets/empty_state.dart';
+import 'package:kroppi/features/history/presentation/utils/date_formatter.dart';
+import 'package:kroppi/features/my_crops/data/datasources/my_crops_remote_data_source.dart';
+import 'package:kroppi/features/my_crops/domain/entities/my_crop.dart';
+import 'package:kroppi/features/my_crops/domain/entities/plot.dart';
+import 'package:kroppi/features/my_crops/presentation/widgets/plot_status_chip.dart';
+import 'package:kroppi/navigation/app_routes.dart';
+
+class CropDetailScreen extends StatefulWidget {
+  const CropDetailScreen({super.key, required this.cropId});
+
+  final String cropId;
+
+  @override
+  State<CropDetailScreen> createState() => _CropDetailScreenState();
+}
+
+class _CropDetailScreenState extends State<CropDetailScreen> {
+  MyCrop? _crop;
+  List<Plot> _plots = [];
+  bool _loading = true;
+  String? _error;
+
+  MyCropsRemoteDataSource get _source =>
+      context.read<MyCropsRemoteDataSource>();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final crops = await _source.getCrops();
+      final plots = await _source.getPlots(widget.cropId);
+      if (!mounted) return;
+      setState(() {
+        _crop = crops.where((c) => c.id == widget.cropId).firstOrNull;
+        _plots = plots;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _open(String path) async {
+    await context.push(path);
+    if (mounted) _load();
+  }
+
+  Future<void> _archive() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Archivar cultivo?'),
+        content: const Text(
+          'Dejará de aparecer en tu lista. El historial se conserva.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Archivar',
+              style: TextStyle(color: AppColors.error),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await _source.archiveCrop(widget.cropId);
+      if (mounted) context.pop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No se pudo archivar: $e')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_crop?.name ?? 'Cultivo'),
+        actions: [
+          if (_crop != null)
+            IconButton(
+              tooltip: 'Archivar',
+              onPressed: _archive,
+              icon: const Icon(Icons.archive_outlined),
+            ),
+        ],
+      ),
+      floatingActionButton: _crop == null
+          ? null
+          : FloatingActionButton.extended(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              onPressed: () => _open(AppRoutes.plotNewPath(widget.cropId)),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Agregar lote'),
+            ),
+      body: SafeArea(
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_error!, textAlign: TextAlign.center),
+                      const SizedBox(height: 12),
+                      OutlinedButton(
+                        onPressed: _load,
+                        child: const Text('Reintentar'),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : _plots.isEmpty
+            ? const EmptyState(
+                icon: Icons.landscape_rounded,
+                title: 'Sin lotes',
+                subtitle:
+                    'Divide tu cultivo en lotes para llevar el control de cada zona.',
+              )
+            : RefreshIndicator(
+                onRefresh: _load,
+                child: ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 100),
+                  itemCount: _plots.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
+                  itemBuilder: (context, i) {
+                    final p = _plots[i];
+                    return _PlotTile(
+                      plot: p,
+                      onTap: () => _open(AppRoutes.plotDetailPath(p.id)),
+                    );
+                  },
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+class _PlotTile extends StatelessWidget {
+  const _PlotTile({required this.plot, required this.onTap});
+
+  final Plot plot;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border(
+              left: BorderSide(color: plot.status.color, width: 5),
+              top: const BorderSide(color: AppColors.border),
+              right: const BorderSide(color: AppColors.border),
+              bottom: const BorderSide(color: AppColors.border),
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      plot.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${plot.areaHa} ha'
+                      '${plot.plantCount != null ? ' · ${plot.plantCount} plantas' : ''}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      plot.lastSampledAt == null
+                          ? 'Sin muestreos'
+                          : 'Último muestreo: ${DateFormatter.short(plot.lastSampledAt!)}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              PlotStatusChip(status: plot.status),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+</file>
+
+<file path="lib/features/my_crops/presentation/screens/crop_form_screen.dart">
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/core/widgets/app_dropdown_field.dart';
+import 'package:kroppi/core/widgets/app_text_field.dart';
+import 'package:kroppi/core/widgets/primary_button.dart';
+import 'package:kroppi/features/history/presentation/utils/date_formatter.dart';
+import 'package:kroppi/features/my_crops/data/datasources/my_crops_remote_data_source.dart';
+
+class CropFormScreen extends StatefulWidget {
+  const CropFormScreen({super.key});
+
+  @override
+  State<CropFormScreen> createState() => _CropFormScreenState();
+}
+
+class _CropFormScreenState extends State<CropFormScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _name = TextEditingController();
+
+  List<Map<String, dynamic>> _types = [];
+  String? _typeId;
+  DateTime? _planted;
+  DateTime? _harvest;
+  bool _loadingTypes = true;
+  bool _saving = false;
+  String? _loadError;
+
+  MyCropsRemoteDataSource get _source =>
+      context.read<MyCropsRemoteDataSource>();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadTypes());
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  void _msg(String text) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  Future<void> _loadTypes() async {
+    try {
+      final types = await _source.getCropTypes();
+      if (!mounted) return;
+      setState(() {
+        _types = types;
+        _loadingTypes = false;
+        if (types.length == 1) _typeId = types.first['id'] as String;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingTypes = false;
+        _loadError = e.toString();
+      });
+    }
+  }
+
+  Future<void> _pickDate(bool planted) async {
+    final now = DateTime.now();
+    final initial = (planted ? _planted : _harvest) ?? now;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year - 30),
+      lastDate: DateTime(now.year + 10),
+    );
+    if (picked == null) return;
+    setState(() => planted ? _planted = picked : _harvest = picked);
+  }
+
+  Future<void> _save() async {
+    if (_saving || !_formKey.currentState!.validate()) return;
+    if (_planted != null && _harvest != null && _harvest!.isBefore(_planted!)) {
+      _msg('La cosecha estimada no puede ser anterior a la siembra.');
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await _source.createCrop(
+        cropTypeId: _typeId!,
+        name: _name.text.trim(),
+        plantedAt: _planted,
+        expectedHarvestAt: _harvest,
+      );
+      if (mounted) context.pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      _msg('No se pudo guardar: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Registrar cultivo')),
+      body: SafeArea(
+        child: _loadingTypes
+            ? const Center(child: CircularProgressIndicator())
+            : _loadError != null
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(_loadError!, textAlign: TextAlign.center),
+                ),
+              )
+            : Form(
+                key: _formKey,
+                child: ListView(
+                  padding: const EdgeInsets.all(24),
+                  children: [
+                    AppDropdownField<String>(
+                      label: 'Tipo de cultivo',
+                      hint: 'Selecciona uno',
+                      value: _typeId,
+                      validator: (v) => v == null ? 'Selecciona el tipo' : null,
+                      onChanged: _saving
+                          ? null
+                          : (v) => setState(() => _typeId = v),
+                      items: [
+                        for (final t in _types)
+                          DropdownMenuItem(
+                            value: t['id'] as String,
+                            child: Text(t['name'] as String),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    AppTextField(
+                      label: 'Nombre del cultivo',
+                      hint: 'Ej. Café Finca La Esperanza',
+                      controller: _name,
+                      textInputAction: TextInputAction.done,
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Ingresa un nombre'
+                          : null,
+                    ),
+                    const SizedBox(height: 16),
+                    _DateField(
+                      label: 'Fecha de siembra (opcional)',
+                      value: _planted,
+                      onTap: () => _pickDate(true),
+                      onClear: () => setState(() => _planted = null),
+                    ),
+                    const SizedBox(height: 16),
+                    _DateField(
+                      label: 'Cosecha estimada (opcional)',
+                      value: _harvest,
+                      onTap: () => _pickDate(false),
+                      onClear: () => setState(() => _harvest = null),
+                    ),
+                    const SizedBox(height: 28),
+                    PrimaryButton(
+                      label: 'Guardar cultivo',
+                      isLoading: _saving,
+                      onPressed: _save,
+                    ),
+                  ],
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+class _DateField extends StatelessWidget {
+  const _DateField({
+    required this.label,
+    required this.value,
+    required this.onTap,
+    required this.onClear,
+  });
+
+  final String label;
+  final DateTime? value;
+  final VoidCallback onTap;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            decoration: BoxDecoration(
+              color: AppColors.primaryLight.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.event_rounded,
+                  color: AppColors.textSecondary,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    value == null
+                        ? 'Seleccionar fecha'
+                        : DateFormatter.short(value!),
+                    style: TextStyle(
+                      color: value == null
+                          ? AppColors.textSecondary.withValues(alpha: 0.7)
+                          : AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                if (value != null)
+                  GestureDetector(
+                    onTap: onClear,
+                    child: const Icon(
+                      Icons.close_rounded,
+                      size: 18,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+</file>
+
+<file path="lib/features/my_crops/presentation/screens/my_crops_screen.dart">
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/core/widgets/empty_state.dart';
+import 'package:kroppi/features/my_crops/domain/entities/my_crop.dart';
+import 'package:kroppi/features/my_crops/presentation/cubit/my_crops_cubit.dart';
+import 'package:kroppi/navigation/app_routes.dart';
+
+class MyCropsScreen extends StatelessWidget {
+  const MyCropsScreen({super.key});
+
+  Future<void> _open(BuildContext context, String path) async {
+    await context.push(path);
+    if (context.mounted) context.read<MyCropsCubit>().load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Mis cultivos',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primaryDark,
+                      ),
+                    ),
+                  ),
+                  IconButton.filled(
+                    tooltip: 'Registrar cultivo',
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                    ),
+                    onPressed: () => _open(context, AppRoutes.cropNew),
+                    icon: const Icon(Icons.add_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  foregroundColor: AppColors.primaryDark,
+                ),
+                onPressed: () => context.push(AppRoutes.guide),
+                icon: const Icon(Icons.menu_book_rounded, size: 18),
+                label: const Text('Guía de enfermedades'),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: BlocBuilder<MyCropsCubit, MyCropsState>(
+                  builder: (context, state) {
+                    if (state.status == MyCropsStatus.failure &&
+                        state.crops.isEmpty) {
+                      return _ErrorView(
+                        message: state.message ?? 'No se pudo cargar.',
+                        onRetry: () => context.read<MyCropsCubit>().load(),
+                      );
+                    }
+                    if (state.crops.isEmpty &&
+                        state.status != MyCropsStatus.success) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (state.isEmpty) {
+                      return const EmptyState(
+                        icon: Icons.grass_rounded,
+                        title: 'Aún no tienes cultivos',
+                        subtitle: 'Registra tu primer cultivo con el botón +.',
+                      );
+                    }
+                    return RefreshIndicator(
+                      onRefresh: () => context.read<MyCropsCubit>().load(),
+                      child: ListView.separated(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.only(bottom: 120),
+                        itemCount: state.crops.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 12),
+                        itemBuilder: (context, i) => _CropTile(
+                          crop: state.crops[i],
+                          onTap: () => _open(
+                            context,
+                            AppRoutes.cropDetailPath(state.crops[i].id),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CropTile extends StatelessWidget {
+  const _CropTile({required this.crop, required this.onTap});
+
+  final MyCrop crop;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final problems = crop.alertPlots + crop.dangerPlots;
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: const BoxDecoration(
+                  color: AppColors.primaryLight,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.grass_rounded,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      crop.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      '${crop.typeName} · ${crop.totalAreaHa} ha',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      crop.totalPlots == 0
+                          ? 'Sin lotes todavía'
+                          : '${crop.totalPlots} lotes'
+                                '${problems > 0 ? ' · $problems con problemas' : ' · todos sanos'}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: crop.dangerPlots > 0
+                            ? AppColors.error
+                            : crop.alertPlots > 0
+                            ? AppColors.warning
+                            : AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textSecondary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorView extends StatelessWidget {
+  const _ErrorView({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.cloud_off_rounded, size: 40, color: AppColors.error),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton(onPressed: onRetry, child: const Text('Reintentar')),
+        ],
+      ),
+    );
+  }
+}
+</file>
+
+<file path="lib/features/my_crops/presentation/screens/plot_detail_screen.dart">
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/features/history/presentation/utils/date_formatter.dart';
+import 'package:kroppi/features/my_crops/domain/entities/plot.dart';
+import 'package:kroppi/features/my_crops/presentation/cubit/plot_detail_cubit.dart';
+import 'package:kroppi/features/my_crops/presentation/widgets/incidence_chart.dart';
+import 'package:kroppi/features/my_crops/presentation/widgets/plot_status_chip.dart';
+import 'package:kroppi/navigation/app_routes.dart';
+
+class PlotDetailScreen extends StatelessWidget {
+  const PlotDetailScreen({super.key, required this.plotId});
+
+  final String plotId;
+
+  Future<void> _startSampling(BuildContext context, PlotDetail d) async {
+    await context.push(AppRoutes.samplingPath(plotId), extra: d.cropSlug);
+    if (context.mounted) context.read<PlotDetailCubit>().load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<PlotDetailCubit, PlotDetailState>(
+      builder: (context, state) {
+        final d = state.detail;
+        return Scaffold(
+          appBar: AppBar(title: Text(d?.plot.name ?? 'Lote')),
+          body: SafeArea(
+            child: d == null
+                ? (state.status == PlotDetailStatus.failure
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  state.message ?? 'No se pudo cargar.',
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 12),
+                                OutlinedButton(
+                                  onPressed: () =>
+                                      context.read<PlotDetailCubit>().load(),
+                                  child: const Text('Reintentar'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : const Center(child: CircularProgressIndicator()))
+                : RefreshIndicator(
+                    onRefresh: () => context.read<PlotDetailCubit>().load(),
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(24),
+                      children: [
+                        _Header(detail: d),
+                        const SizedBox(height: 24),
+                        SizedBox(
+                          height: 56,
+                          child: ElevatedButton.icon(
+                            onPressed: () => _startSampling(context, d),
+                            icon: const Icon(Icons.photo_camera_rounded),
+                            label: const Text('Nuevo muestreo'),
+                          ),
+                        ),
+                        const SizedBox(height: 28),
+                        const Text(
+                          'Evolución de la incidencia',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Alerta desde ${d.alertPct.toStringAsFixed(0)} % · '
+                          'peligro desde ${d.dangerPct.toStringAsFixed(0)} %',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (state.samples.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 24),
+                            child: Text(
+                              'Aún no hay muestreos. Haz el primero para saber qué tan sano está este lote.',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
+                          )
+                        else
+                          IncidenceChart(
+                            samples: state.samples,
+                            alertPct: d.alertPct,
+                            dangerPct: d.dangerPct,
+                          ),
+                      ],
+                    ),
+                  ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({required this.detail});
+
+  final PlotDetail detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = detail.plot;
+    final last = detail.lastIncidencePct;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: p.status.color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: p.status.color.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  detail.cropName,
+                  style: const TextStyle(color: AppColors.textSecondary),
+                ),
+              ),
+              PlotStatusChip(status: p.status),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            last == null
+                ? 'Sin datos de incidencia'
+                : '${last.toStringAsFixed(1)} %',
+            style: TextStyle(
+              fontSize: 30,
+              fontWeight: FontWeight.w800,
+              color: p.status.color,
+            ),
+          ),
+          Text(
+            last == null
+                ? 'Haz un muestreo para calcularla'
+                : 'de plantas afectadas en el último muestreo',
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const Divider(height: 28),
+          Wrap(
+            spacing: 18,
+            runSpacing: 6,
+            children: [
+              _Info(Icons.straighten_rounded, '${p.areaHa} ha'),
+              if (p.plantCount != null)
+                _Info(Icons.grass_rounded, '${p.plantCount} plantas'),
+              if (p.variety != null)
+                _Info(Icons.local_florist_rounded, p.variety!),
+              if (p.lastSampledAt != null)
+                _Info(
+                  Icons.event_rounded,
+                  DateFormatter.short(p.lastSampledAt!),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Info extends StatelessWidget {
+  const _Info(this.icon, this.text);
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 16, color: AppColors.textSecondary),
+        const SizedBox(width: 6),
+        Text(text, style: const TextStyle(fontSize: 13)),
+      ],
+    );
+  }
+}
+</file>
+
+<file path="lib/features/my_crops/presentation/screens/plot_form_screen.dart">
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:kroppi/core/widgets/app_text_field.dart';
+import 'package:kroppi/core/widgets/primary_button.dart';
+import 'package:kroppi/features/my_crops/data/datasources/my_crops_remote_data_source.dart';
+
+class PlotFormScreen extends StatefulWidget {
+  const PlotFormScreen({super.key, required this.cropId});
+
+  final String cropId;
+
+  @override
+  State<PlotFormScreen> createState() => _PlotFormScreenState();
+}
+
+class _PlotFormScreenState extends State<PlotFormScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _name = TextEditingController();
+  final _area = TextEditingController();
+  final _plants = TextEditingController();
+  final _variety = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _area.dispose();
+    _plants.dispose();
+    _variety.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_saving || !_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    try {
+      await context.read<MyCropsRemoteDataSource>().createPlot(
+        widget.cropId,
+        name: _name.text.trim(),
+        areaHa: double.parse(_area.text.trim().replaceAll(',', '.')),
+        plantCount: int.tryParse(_plants.text.trim()),
+        variety: _variety.text.trim(),
+      );
+      if (mounted) context.pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('No se pudo guardar: $e')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Nuevo lote')),
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              AppTextField(
+                label: 'Nombre del lote',
+                hint: 'Ej. Lote 1',
+                controller: _name,
+                textInputAction: TextInputAction.next,
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? 'Ingresa un nombre'
+                    : null,
+              ),
+              const SizedBox(height: 16),
+              AppTextField(
+                label: 'Área (hectáreas)',
+                hint: 'Ej. 2.5',
+                controller: _area,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                textInputAction: TextInputAction.next,
+                validator: (v) {
+                  final n = double.tryParse(
+                    (v ?? '').trim().replaceAll(',', '.'),
+                  );
+                  if (n == null || n <= 0) return 'Ingresa un área válida';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              AppTextField(
+                label: 'Número de plantas (opcional)',
+                hint: 'Ej. 1200',
+                controller: _plants,
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.next,
+                validator: (v) {
+                  final t = (v ?? '').trim();
+                  if (t.isEmpty) return null;
+                  final n = int.tryParse(t);
+                  return (n == null || n < 1) ? 'Número no válido' : null;
+                },
+              ),
+              const SizedBox(height: 16),
+              AppTextField(
+                label: 'Variedad (opcional)',
+                hint: 'Ej. Castillo',
+                controller: _variety,
+                textInputAction: TextInputAction.done,
+              ),
+              const SizedBox(height: 28),
+              PrimaryButton(
+                label: 'Guardar lote',
+                isLoading: _saving,
+                onPressed: _save,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+</file>
+
+<file path="lib/features/my_crops/presentation/widgets/incidence_chart.dart">
+import 'package:flutter/material.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/features/my_crops/domain/entities/plot_sample.dart';
+
+/// Línea de incidencia (%) por muestreo, con las líneas de alerta y peligro.
+class IncidenceChart extends StatelessWidget {
+  const IncidenceChart({
+    super.key,
+    required this.samples,
+    required this.alertPct,
+    required this.dangerPct,
+  });
+
+  final List<PlotSample> samples;
+  final double alertPct;
+  final double dangerPct;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 170,
+      width: double.infinity,
+      child: CustomPaint(painter: _ChartPainter(samples, alertPct, dangerPct)),
+    );
+  }
+}
+
+class _ChartPainter extends CustomPainter {
+  _ChartPainter(this.samples, this.alertPct, this.dangerPct);
+
+  final List<PlotSample> samples;
+  final double alertPct;
+  final double dangerPct;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const left = 34.0, bottom = 8.0, top = 8.0;
+    final w = size.width - left;
+    final h = size.height - top - bottom;
+
+    final maxData = samples.fold<double>(
+      0,
+      (m, s) => s.incidencePct > m ? s.incidencePct : m,
+    );
+    final maxY = [
+      maxData * 1.2,
+      dangerPct * 1.3,
+      10.0,
+    ].reduce((a, b) => a > b ? a : b);
+
+    double yOf(double v) => top + h - (v / maxY) * h;
+    double xOf(int i) =>
+        left + (samples.length == 1 ? w / 2 : i * w / (samples.length - 1));
+
+    void label(String t, double y) {
+      final tp = TextPainter(
+        text: TextSpan(
+          text: t,
+          style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(0, y - tp.height / 2));
+    }
+
+    void guide(double v, Color c) {
+      final y = yOf(v);
+      canvas.drawLine(
+        Offset(left, y),
+        Offset(size.width, y),
+        Paint()
+          ..color = c.withValues(alpha: 0.5)
+          ..strokeWidth = 1,
+      );
+      label('${v.toStringAsFixed(0)}%', y);
+    }
+
+    guide(alertPct, AppColors.warning);
+    guide(dangerPct, AppColors.error);
+    label('0%', yOf(0));
+
+    if (samples.isEmpty) return;
+
+    final path = Path();
+    for (var i = 0; i < samples.length; i++) {
+      final p = Offset(xOf(i), yOf(samples[i].incidencePct));
+      i == 0 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = AppColors.primary
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5
+        ..strokeJoin = StrokeJoin.round,
+    );
+    for (var i = 0; i < samples.length; i++) {
+      final p = Offset(xOf(i), yOf(samples[i].incidencePct));
+      canvas.drawCircle(p, 5, Paint()..color = Colors.white);
+      canvas.drawCircle(p, 3.5, Paint()..color = AppColors.primaryDark);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ChartPainter old) =>
+      old.samples != samples ||
+      old.alertPct != alertPct ||
+      old.dangerPct != dangerPct;
+}
+</file>
+
+<file path="lib/features/my_crops/presentation/widgets/plot_status_chip.dart">
+import 'package:flutter/material.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/features/my_crops/domain/entities/plot.dart';
+
+extension PlotStatusX on PlotStatus {
+  String get label => switch (this) {
+    PlotStatus.healthy => 'Sano',
+    PlotStatus.alert => 'En alerta',
+    PlotStatus.danger => 'En peligro',
+  };
+
+  Color get color => switch (this) {
+    PlotStatus.healthy => AppColors.primary,
+    PlotStatus.alert => AppColors.warning,
+    PlotStatus.danger => AppColors.error,
+  };
+}
+
+class PlotStatusChip extends StatelessWidget {
+  const PlotStatusChip({super.key, required this.status});
+
+  final PlotStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = status.color;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: c.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.circle, size: 8, color: c),
+          const SizedBox(width: 6),
+          Text(
+            status.label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: c,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+</file>
+
 <file path="lib/features/profile/data/datasources/profile_remote_data_source.dart">
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -8141,8 +10692,6 @@ class EditProfileCubit extends Cubit<EditProfileState> {
 </file>
 
 <file path="lib/features/profile/presentation/screens/personal_data_screen.dart">
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -8420,8 +10969,9 @@ class _PersonalDataScreenState extends State<PersonalDataScreen> {
             validator: Validators.role,
             onChanged: (isSaving || isAdmin)
                 ? null
-                : (value) =>
-                      setState(() => _role = value ?? RegisterOptions.roleFarmer),
+                : (value) => setState(
+                    () => _role = value ?? RegisterOptions.roleFarmer,
+                  ),
             items: [
               for (final entry in roles.entries)
                 DropdownMenuItem(value: entry.key, child: Text(entry.value)),
@@ -8730,6 +11280,380 @@ class UserAvatar extends StatelessWidget {
 }
 </file>
 
+<file path="lib/features/sampling/presentation/cubit/sampling_cubit.dart">
+import 'dart:io';
+
+import 'package:equatable/equatable.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:kroppi/features/crop_diagnosis/domain/usecases/analyze_crop_image_usecase.dart';
+import 'package:kroppi/features/my_crops/data/datasources/my_crops_remote_data_source.dart';
+import 'package:kroppi/features/my_crops/domain/entities/plot_sample.dart';
+
+enum SamplingStatus { idle, scanning, closing, done, failure }
+
+class SamplingState extends Equatable {
+  const SamplingState({
+    this.status = SamplingStatus.idle,
+    this.ids = const [],
+    this.inconclusive = 0,
+    this.result,
+    this.message,
+  });
+
+  final SamplingStatus status;
+  final List<String> ids; // diagnósticos de esta sesión
+  final int inconclusive; // fotos con confianza baja (informativo)
+  final SampleResult? result;
+  final String? message;
+
+  bool get isBusy =>
+      status == SamplingStatus.scanning || status == SamplingStatus.closing;
+
+  SamplingState copyWith({
+    SamplingStatus? status,
+    List<String>? ids,
+    int? inconclusive,
+    SampleResult? result,
+    String? message,
+  }) => SamplingState(
+    status: status ?? this.status,
+    ids: ids ?? this.ids,
+    inconclusive: inconclusive ?? this.inconclusive,
+    result: result ?? this.result,
+    message: message, // se limpia en cada emisión
+  );
+
+  @override
+  List<Object?> get props => [status, ids, inconclusive, result, message];
+}
+
+class SamplingCubit extends Cubit<SamplingState> {
+  SamplingCubit({
+    required this.plotId,
+    required this.cropSlug,
+    required this.userId,
+    required this._analyze, // Usando initializing formal
+    required this._source, // Usando initializing formal
+    this.target = 20,
+  }) : super(
+         const SamplingState(),
+       ); // Ya no necesitas los dos puntos (: _analyze = ...)
+
+  final String plotId;
+  final String cropSlug;
+  final String userId;
+  final int target;
+  final AnalyzeCropImageUsecase _analyze;
+  final MyCropsRemoteDataSource _source;
+
+  // ... resto del código ...
+
+  /// Solo para avisar en pantalla; la decisión real la toma el backend.
+  static const _umbral = 0.7;
+
+  Future<void> scan(File image) async {
+    if (state.isBusy) return;
+    emit(state.copyWith(status: SamplingStatus.scanning));
+    try {
+      final d = await _analyze(
+        imageFile: image,
+        userId: userId,
+        cropSlug: cropSlug,
+        plotId: plotId,
+      );
+      emit(
+        state.copyWith(
+          status: SamplingStatus.idle,
+          ids: [...state.ids, d.id],
+          inconclusive: state.inconclusive + (d.confidence < _umbral ? 1 : 0),
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(status: SamplingStatus.failure, message: e.toString()),
+      );
+    }
+  }
+
+  Future<void> finish() async {
+    if (state.isBusy || state.ids.isEmpty) return;
+    emit(state.copyWith(status: SamplingStatus.closing));
+    try {
+      final r = await _source.closeSample(plotId, state.ids);
+      emit(state.copyWith(status: SamplingStatus.done, result: r));
+    } catch (e) {
+      emit(
+        state.copyWith(status: SamplingStatus.failure, message: e.toString()),
+      );
+    }
+  }
+}
+</file>
+
+<file path="lib/features/sampling/presentation/screens/sampling_screen.dart">
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/features/crop_diagnosis/presentation/services/image_picker_service.dart';
+import 'package:kroppi/features/my_crops/domain/entities/plot_sample.dart';
+import 'package:kroppi/features/my_crops/presentation/widgets/plot_status_chip.dart';
+import 'package:kroppi/features/sampling/presentation/cubit/sampling_cubit.dart';
+import 'package:kroppi/features/my_crops/domain/entities/plot.dart';
+
+class SamplingScreen extends StatelessWidget {
+  const SamplingScreen({super.key, required this.plotId});
+
+  final String plotId;
+
+  Future<void> _capture(BuildContext context, {required bool camera}) async {
+    final picker = ImagePickerService();
+    final File? file = camera
+        ? await picker.pickImageFromCamera()
+        : await picker.pickImageFromGallery();
+    if (file != null && context.mounted) {
+      context.read<SamplingCubit>().scan(file);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocConsumer<SamplingCubit, SamplingState>(
+      listenWhen: (_, s) => s.status == SamplingStatus.failure,
+      listener: (context, state) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(content: Text(state.message ?? 'Ocurrió un error.')),
+          );
+      },
+      builder: (context, state) {
+        if (state.status == SamplingStatus.done && state.result != null) {
+          return _Summary(result: state.result!);
+        }
+
+        final cubit = context.read<SamplingCubit>();
+        final count = state.ids.length;
+        final scanning = state.status == SamplingStatus.scanning;
+
+        return Scaffold(
+          appBar: AppBar(title: const Text('Muestreo del lote')),
+          body: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  Text(
+                    count < cubit.target
+                        ? 'Planta ${count + 1} de ${cubit.target}'
+                        : '$count plantas escaneadas',
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primaryDark,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      minHeight: 10,
+                      value: (count / cubit.target).clamp(0, 1).toDouble(),
+                      backgroundColor: AppColors.primaryLight,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Toma una foto clara de una hoja de cada planta, '
+                    'recorriendo el lote en zigzag.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                  if (state.inconclusive > 0) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.warning.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.info_outline_rounded,
+                            color: AppColors.warning,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${state.inconclusive} foto(s) no fueron concluyentes y '
+                              'no contarán en el resultado. Mejora la luz y el enfoque.',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const Spacer(),
+                  if (scanning || state.status == SamplingStatus.closing)
+                    Column(
+                      children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 12),
+                        Text(
+                          scanning
+                              ? 'Analizando imagen…'
+                              : 'Calculando resultado…',
+                        ),
+                      ],
+                    )
+                  else
+                    GestureDetector(
+                      onTap: () => _capture(context, camera: true),
+                      child: Container(
+                        width: 120,
+                        height: 120,
+                        decoration: const BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.photo_camera_rounded,
+                          size: 52,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: state.isBusy
+                        ? null
+                        : () => _capture(context, camera: false),
+                    child: const Text('Elegir de la galería'),
+                  ),
+                  const Spacer(),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: ElevatedButton(
+                      onPressed: (state.isBusy || count == 0)
+                          ? null
+                          : cubit.finish,
+                      child: Text(
+                        count == 0
+                            ? 'Escanea al menos una planta'
+                            : 'Terminar muestreo ($count)',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _Summary extends StatelessWidget {
+  const _Summary({required this.result});
+
+  final SampleResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = result.status.color;
+    final message = switch (result.status) {
+      PlotStatus.healthy => 'La incidencia está bajo el nivel de alerta.',
+      PlotStatus.alert =>
+        'Hay presencia de enfermedad. Vigila el lote y consulta a un técnico.',
+      PlotStatus.danger =>
+        'Incidencia alta. Consulta a un agrónomo cuanto antes.',
+    };
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Resultado del muestreo'),
+        automaticallyImplyLeading: false,
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              const Spacer(),
+              Container(
+                width: 170,
+                height: 170,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: color.withValues(alpha: 0.12),
+                  border: Border.all(color: color, width: 4),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  '${result.incidencePct.toStringAsFixed(1)} %',
+                  style: TextStyle(
+                    fontSize: 34,
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              PlotStatusChip(status: result.status),
+              const SizedBox(height: 16),
+              Text(
+                '${result.affected} de ${result.evaluated} plantas afectadas',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (result.discarded > 0) ...[
+                const SizedBox(height: 6),
+                Text(
+                  '${result.discarded} foto(s) descartadas por no ser concluyentes',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppColors.textSecondary),
+              ),
+              const Spacer(),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: () => context.pop(),
+                  child: const Text('Volver al lote'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+</file>
+
+<file path="lib/features/sampling/presentation/screens/sampling_summary_screen.dart">
+
+</file>
+
 <file path="lib/navigation/presentation/shell/widgets/floating_nav_bar.dart">
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -8868,32 +11792,63 @@ class MainShell extends StatelessWidget {
 
 <file path="lib/navigation/app_router.dart">
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:kroppi/core/network/supabase/supabase_client.dart'
     as app_supabase;
-import 'package:go_router/go_router.dart';
-import 'package:kroppi/navigation/app_routes.dart';
 import 'package:kroppi/core/widgets/placeholder_screen.dart';
+import 'package:kroppi/navigation/app_routes.dart';
+import 'package:kroppi/navigation/presentation/shell/main_shell.dart';
+
+// Auth
+import 'package:kroppi/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:kroppi/features/auth/presentation/bloc/auth_state.dart';
 import 'package:kroppi/features/auth/presentation/screens/splash/splash_screen.dart';
 import 'package:kroppi/features/auth/presentation/screens/login_screen.dart';
 import 'package:kroppi/features/auth/presentation/screens/register_screen.dart';
+
+// Home, historial, perfil
 import 'package:kroppi/features/home/presentation/screens/home_screen.dart';
-import 'package:kroppi/navigation/presentation/shell/main_shell.dart';
 import 'package:kroppi/features/history/presentation/screens/history_screen.dart';
-import 'package:kroppi/features/crops/presentation/screens/crops_screen.dart';
-import 'package:kroppi/features/crops/presentation/screens/crop_detail_screen.dart';
+import 'package:kroppi/features/history/presentation/screens/diagnosis_detail_screen.dart';
+import 'package:kroppi/features/history/data/datasources/history_remote_data_source.dart';
+import 'package:kroppi/features/history/data/repositories/history_repository_impl.dart';
+import 'package:kroppi/features/history/domain/entities/diagnosis_record.dart';
+import 'package:kroppi/features/history/domain/usecases/get_diagnosis_history_usecase.dart';
+import 'package:kroppi/features/history/presentation/cubit/history_cubit.dart';
 import 'package:kroppi/features/profile/data/datasources/profile_remote_data_source.dart';
 import 'package:kroppi/features/profile/data/repositories/profile_repository_impl.dart';
 import 'package:kroppi/features/profile/domain/usecases/update_profile_usecase.dart';
 import 'package:kroppi/features/profile/presentation/cubit/edit_profile_cubit.dart';
 import 'package:kroppi/features/profile/presentation/screens/personal_data_screen.dart';
 import 'package:kroppi/features/profile/presentation/screens/profile_screen.dart';
-import 'package:kroppi/features/history/presentation/screens/diagnosis_detail_screen.dart';
+
+// Diagnóstico
 import 'package:kroppi/features/crop_diagnosis/domain/usecases/analyze_crop_image_usecase.dart';
 import 'package:kroppi/features/crop_diagnosis/presentation/bloc/diagnosis_bloc.dart';
 import 'package:kroppi/features/crop_diagnosis/presentation/screens/diagnosis_screen.dart';
 
+// Guía estática
+import 'package:kroppi/features/guide/presentation/screens/crops_screen.dart'
+    as guide;
+import 'package:kroppi/features/guide/presentation/screens/crop_detail_screen.dart'
+    as guide_detail;
+
+// Mis cultivos y muestreo
+import 'package:kroppi/features/my_crops/data/datasources/my_crops_remote_data_source.dart';
+import 'package:kroppi/features/my_crops/presentation/cubit/my_crops_cubit.dart';
+import 'package:kroppi/features/my_crops/presentation/cubit/plot_detail_cubit.dart';
+import 'package:kroppi/features/my_crops/presentation/screens/my_crops_screen.dart';
+import 'package:kroppi/features/my_crops/presentation/screens/crop_form_screen.dart';
+import 'package:kroppi/features/my_crops/presentation/screens/crop_detail_screen.dart'
+    as my_crop_detail;
+import 'package:kroppi/features/my_crops/presentation/screens/plot_form_screen.dart';
+import 'package:kroppi/features/my_crops/presentation/screens/plot_detail_screen.dart';
+import 'package:kroppi/features/sampling/presentation/cubit/sampling_cubit.dart';
+import 'package:kroppi/features/sampling/presentation/screens/sampling_screen.dart';
+
 class AppRouter {
   AppRouter._();
+
   static final GoRouter router = GoRouter(
     initialLocation: AppRoutes.splash,
     routes: [
@@ -8927,15 +11882,32 @@ class AppRouter {
             routes: [
               GoRoute(
                 path: AppRoutes.history,
-                builder: (context, state) => const HistoryScreen(),
+                builder: (context, state) => BlocProvider(
+                  create: (_) => HistoryCubit(
+                    GetDiagnosisHistoryUsecase(
+                      HistoryRepositoryImpl(
+                        HistoryRemoteDataSource(
+                          app_supabase.SupabaseClient.client,
+                        ),
+                      ),
+                    ),
+                  )..load(),
+                  child: const HistoryScreen(),
+                ),
               ),
             ],
           ),
           StatefulShellBranch(
             routes: [
+              // Pestaña: Mis cultivos
               GoRoute(
                 path: AppRoutes.crops,
-                builder: (context, state) => const CropsScreen(),
+                builder: (context, state) => BlocProvider(
+                  create: (context) =>
+                      MyCropsCubit(context.read<MyCropsRemoteDataSource>())
+                        ..load(),
+                  child: const MyCropsScreen(),
+                ),
               ),
             ],
           ),
@@ -8950,13 +11922,11 @@ class AppRouter {
         ],
       ),
 
-      // Fuera de la barra inferior (a pantalla completa)
+      // Diagnóstico suelto (sin lote)
       GoRoute(
-        path: AppRoutes.diagnose, // Corresponde al string '/diagnose'
+        path: AppRoutes.diagnose,
         builder: (context, state) {
-          // Si pasaste el userId mediante context.push(AppRoutes.diagnose, extra: userId)
           final userId = state.extra as String? ?? 'id_usuario_default';
-
           return BlocProvider(
             create: (context) => DiagnosisBloc(
               analyzeCropImageUseCase: context.read<AnalyzeCropImageUsecase>(),
@@ -8965,6 +11935,70 @@ class AppRouter {
           );
         },
       ),
+
+      // --- Cultivos y lotes del usuario ---
+      // IMPORTANTE: cropNew va ANTES de cropDetail
+      GoRoute(
+        path: AppRoutes.cropNew,
+        builder: (context, state) => const CropFormScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.cropDetail,
+        builder: (context, state) => my_crop_detail.CropDetailScreen(
+          cropId: state.pathParameters['cropId']!,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.plotNew,
+        builder: (context, state) =>
+            PlotFormScreen(cropId: state.pathParameters['cropId']!),
+      ),
+      GoRoute(
+        path: AppRoutes.plotDetail,
+        builder: (context, state) {
+          final plotId = state.pathParameters['plotId']!;
+          return BlocProvider(
+            create: (context) =>
+                PlotDetailCubit(context.read<MyCropsRemoteDataSource>(), plotId)
+                  ..load(),
+            child: PlotDetailScreen(plotId: plotId),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.sampling,
+        builder: (context, state) {
+          final plotId = state.pathParameters['plotId']!;
+          // PlotDetailScreen envía el slug del cultivo en `extra`
+          final cropSlug = state.extra as String? ?? 'cafe';
+          final auth = context.read<AuthBloc>().state;
+          final userId = auth is AuthAuthenticated ? auth.user.id : '';
+          return BlocProvider(
+            create: (context) => SamplingCubit(
+              plotId: plotId,
+              cropSlug: cropSlug,
+              userId: userId,
+              analyze: context.read<AnalyzeCropImageUsecase>(),
+              source: context.read<MyCropsRemoteDataSource>(),
+            ),
+            child: SamplingScreen(plotId: plotId),
+          );
+        },
+      ),
+
+      // --- Guía estática (movida desde /crops) ---
+      GoRoute(
+        path: AppRoutes.guide,
+        builder: (context, state) => const guide.CropsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.guideDetail,
+        builder: (context, state) => guide_detail.CropDetailScreen(
+          cropId: state.pathParameters['cropId']!,
+        ),
+      ),
+
+      // --- Perfil, historial y utilidades ---
       GoRoute(
         path: AppRoutes.personalData,
         builder: (context, state) => BlocProvider(
@@ -8989,14 +12023,10 @@ class AppRouter {
             const PlaceholderScreen(title: 'Ayuda y soporte'),
       ),
       GoRoute(
-        path: AppRoutes.cropDetail,
-        builder: (context, state) =>
-            CropDetailScreen(cropId: state.pathParameters['cropId']!),
-      ),
-      GoRoute(
         path: AppRoutes.diagnosisDetail,
         builder: (context, state) => DiagnosisDetailScreen(
           diagnosisId: state.pathParameters['diagnosisId']!,
+          record: state.extra as DiagnosisRecord?,
         ),
       ),
     ],
@@ -9015,30 +12045,46 @@ class AppRoutes {
   // Pestañas de la barra inferior
   static const home = '/home';
   static const history = '/history';
-  static const crops = '/crops';
+  static const crops = '/crops'; // Mis cultivos
   static const profile = '/profile';
 
-  // Pantallas a pantalla completa (sin barra inferior)
+  // Pantallas a pantalla completa
   static const diagnose = '/diagnose';
   static const notifications = '/notifications';
   static const help = '/help';
   static const personalData = '/profile/personal-data';
 
-  // Detalle de un cultivo específico
+  // Cultivos y lotes del usuario (cropNew SIEMPRE antes de cropDetail)
+  static const cropNew = '/crops/new';
   static const cropDetail = '/crops/:cropId';
-  static String cropDetailPath(String cropId) => '/crops/$cropId';
+  static String cropDetailPath(String id) => '/crops/$id';
 
+  static const plotNew = '/crops/:cropId/plots/new';
+  static String plotNewPath(String cropId) => '/crops/$cropId/plots/new';
+
+  static const plotDetail = '/plots/:plotId';
+  static String plotDetailPath(String id) => '/plots/$id';
+
+  static const sampling = '/plots/:plotId/sampling';
+  static String samplingPath(String id) => '/plots/$id/sampling';
+
+  // Guía estática (antes /crops)
+  static const guide = '/guide';
+  static const guideDetail = '/guide/:cropId';
+  static String guideDetailPath(String id) => '/guide/$id';
+
+  // Detalle de un diagnóstico del historial
   static const diagnosisDetail = '/history/:diagnosisId';
-  static String diagnosisDetailPath(String diagnosisId) =>
-      '/history/$diagnosisId';
+  static String diagnosisDetailPath(String id) => '/history/$id';
 }
 </file>
 
 <file path="lib/app.dart">
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:dio/dio.dart';
 import 'package:kroppi/core/constants/app_strings.dart';
+import 'package:kroppi/core/network/api/fastapi_client.dart';
+import 'package:kroppi/core/network/api/services/ai_backend_service.dart';
 import 'package:kroppi/core/network/supabase/supabase_client.dart'
     as app_supabase;
 import 'package:kroppi/core/theme/app_theme.dart';
@@ -9053,6 +12099,7 @@ import 'package:kroppi/features/auth/domain/usecases/sign_up_with_email_usecase.
 import 'package:kroppi/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:kroppi/features/crop_diagnosis/data/repositories/crop_diagnosis_repository_impl.dart';
 import 'package:kroppi/features/crop_diagnosis/domain/usecases/analyze_crop_image_usecase.dart';
+import 'package:kroppi/features/my_crops/data/datasources/my_crops_remote_data_source.dart';
 import 'package:kroppi/navigation/app_router.dart';
 
 class KroppiApp extends StatelessWidget {
@@ -9066,13 +12113,18 @@ class KroppiApp extends StatelessWidget {
       ),
     );
     final analyzeCropImageUsecase = AnalyzeCropImageUsecase(
-      repository: CropDiagnosisRepositoryImpl(
-        dioClient: Dio(BaseOptions(baseUrl: 'https://tu-backend-api.com')),
-      ),
+      repository: CropDiagnosisRepositoryImpl(dioClient: FastApiClient.client),
     );
 
-    return RepositoryProvider<AnalyzeCropImageUsecase>.value(
-      value: analyzeCropImageUsecase,
+    return MultiRepositoryProvider(
+      providers: [
+        RepositoryProvider<AnalyzeCropImageUsecase>.value(
+          value: analyzeCropImageUsecase,
+        ),
+        RepositoryProvider<MyCropsRemoteDataSource>.value(
+          value: MyCropsRemoteDataSource(AiBackendService()),
+        ),
+      ],
       child: BlocProvider(
         create: (context) => AuthBloc(
           signInWithGoogle: SignInWithGoogleUsecase(authRepository),
@@ -9124,12 +12176,14 @@ class KroppiApp extends StatelessWidget {
 <file path="lib/main.dart">
 import 'package:flutter/material.dart';
 import 'package:kroppi/app.dart';
+import 'package:kroppi/core/network/api/fastapi_client.dart';
 import 'package:kroppi/core/network/supabase/supabase_client.dart'
     as app_supabase;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await app_supabase.SupabaseClient.init();
+  FastApiClient.init();
   runApp(const KroppiApp());
 }
 </file>
@@ -13138,7 +16192,7 @@ packages:
     source: hosted
     version: "1.6.0"
   http_parser:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: http_parser
       sha256: "178d74305e7866013777bab2c3d8726205dc5a4dd935297175b19a23a2e66571"
@@ -13766,6 +16820,7 @@ dependencies:
   go_router: ^17.2.0
   google_fonts: ^8.2.1
   google_sign_in: ^7.2.0
+  http_parser: ^4.1.2
   image_picker: ^1.2.3
   supabase_flutter: ^2.18.0
 

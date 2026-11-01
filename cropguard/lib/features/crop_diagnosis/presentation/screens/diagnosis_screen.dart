@@ -1,7 +1,6 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'package:kroppi/features/crop_diagnosis/presentation/services/image_picker_service.dart';
 import '../bloc/diagnosis_bloc.dart';
@@ -32,7 +31,7 @@ class DiagnosisScreen extends StatelessWidget {
                   title: const Text('Tomar foto con la cámara'),
                   onTap: () async {
                     Navigator.pop(bottomSheetContext);
-                    final File? image = await imagePickerService
+                    final XFile? image = await imagePickerService
                         .pickImageFromCamera();
 
                     if (image != null && context.mounted) {
@@ -50,7 +49,7 @@ class DiagnosisScreen extends StatelessWidget {
                   title: const Text('Seleccionar de la galería'),
                   onTap: () async {
                     Navigator.pop(bottomSheetContext);
-                    final File? image = await imagePickerService
+                    final XFile? image = await imagePickerService
                         .pickImageFromGallery();
 
                     if (image != null && context.mounted) {
