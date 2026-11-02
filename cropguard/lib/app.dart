@@ -17,6 +17,7 @@ import 'package:kroppi/features/auth/domain/usecases/sign_up_with_email_usecase.
 import 'package:kroppi/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:kroppi/features/crop_diagnosis/data/repositories/crop_diagnosis_repository_impl.dart';
 import 'package:kroppi/features/crop_diagnosis/domain/usecases/analyze_crop_image_usecase.dart';
+import 'package:kroppi/features/farms/data/datasources/farm_remote_data_source.dart';
 import 'package:kroppi/features/my_crops/data/datasources/my_crops_remote_data_source.dart';
 import 'package:kroppi/navigation/app_router.dart';
 
@@ -41,6 +42,10 @@ class KroppiApp extends StatelessWidget {
         ),
         RepositoryProvider<MyCropsRemoteDataSource>.value(
           value: MyCropsRemoteDataSource(AiBackendService()),
+        ),
+        RepositoryProvider<FarmRemoteDataSource>(
+          create: (_) =>
+              FarmRemoteDataSource(app_supabase.SupabaseClient.client),
         ),
       ],
       child: BlocProvider(

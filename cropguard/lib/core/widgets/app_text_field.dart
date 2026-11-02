@@ -12,6 +12,7 @@ class AppTextField extends StatefulWidget {
     this.textInputAction,
     this.onSubmitted,
     this.isPassword = false,
+    this.maxLines = 1,
   });
 
   final String label;
@@ -22,6 +23,7 @@ class AppTextField extends StatefulWidget {
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onSubmitted;
   final bool isPassword;
+  final int maxLines;
 
   @override
   State<AppTextField> createState() => _AppTextFieldState();
@@ -51,6 +53,7 @@ class _AppTextFieldState extends State<AppTextField> {
           keyboardType: widget.keyboardType,
           textInputAction: widget.textInputAction,
           onFieldSubmitted: widget.onSubmitted,
+          maxLines: widget.maxLines,
           decoration: InputDecoration(
             hintText: widget.hint ?? widget.label,
             hintStyle: TextStyle(

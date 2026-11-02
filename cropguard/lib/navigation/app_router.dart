@@ -14,6 +14,14 @@ import 'package:kroppi/features/auth/presentation/screens/login_screen.dart';
 import 'package:kroppi/features/auth/presentation/screens/register_screen.dart';
 
 // Home, historial, perfil
+import 'package:kroppi/features/farms/data/datasources/farm_remote_data_source.dart';
+import 'package:kroppi/features/farms/presentation/cubit/farms_cubit.dart';
+import 'package:kroppi/features/farms/presentation/screens/farm_form_screen.dart';
+import 'package:kroppi/features/farms/presentation/screens/farm_detail_screen.dart';
+import 'package:kroppi/features/farms/presentation/screens/farm_crop_form_screen.dart';
+import 'package:kroppi/features/farms/presentation/screens/farm_plot_detail_screen.dart';
+import 'package:kroppi/features/farms/presentation/screens/farms_screen.dart';
+import 'package:kroppi/features/home/presentation/cubit/home_cubit.dart';
 import 'package:kroppi/features/home/presentation/screens/home_screen.dart';
 import 'package:kroppi/features/history/presentation/screens/history_screen.dart';
 import 'package:kroppi/features/history/presentation/screens/diagnosis_detail_screen.dart';
@@ -42,9 +50,7 @@ import 'package:kroppi/features/guide/presentation/screens/crop_detail_screen.da
 
 // Mis cultivos y muestreo
 import 'package:kroppi/features/my_crops/data/datasources/my_crops_remote_data_source.dart';
-import 'package:kroppi/features/my_crops/presentation/cubit/my_crops_cubit.dart';
 import 'package:kroppi/features/my_crops/presentation/cubit/plot_detail_cubit.dart';
-import 'package:kroppi/features/my_crops/presentation/screens/my_crops_screen.dart';
 import 'package:kroppi/features/my_crops/presentation/screens/crop_form_screen.dart';
 import 'package:kroppi/features/my_crops/presentation/screens/crop_detail_screen.dart'
     as my_crop_detail;
@@ -74,8 +80,11 @@ class AppRouter {
 
       // Pestañas con barra de navegación inferior
       StatefulShellRoute.indexedStack(
-        builder: (context, state, navigationShell) =>
-            MainShell(navigationShell: navigationShell),
+        builder: (context, state, navigationShell) => BlocProvider(
+          create: (context) =>
+              HomeCubit(context.read<FarmRemoteDataSource>())..load(),
+          child: MainShell(navigationShell: navigationShell),
+        ),
         branches: [
           StatefulShellBranch(
             routes: [
@@ -106,14 +115,13 @@ class AppRouter {
           ),
           StatefulShellBranch(
             routes: [
-              // Pestaña: Mis cultivos
+              // Pestaña: gestión de fincas
               GoRoute(
-                path: AppRoutes.crops,
+                path: AppRoutes.farms,
                 builder: (context, state) => BlocProvider(
                   create: (context) =>
-                      MyCropsCubit(context.read<MyCropsRemoteDataSource>())
-                        ..load(),
-                  child: const MyCropsScreen(),
+                      FarmsCubit(context.read<FarmRemoteDataSource>())..load(),
+                  child: const FarmsScreen(),
                 ),
               ),
             ],
@@ -144,7 +152,49 @@ class AppRouter {
       ),
 
       // --- Cultivos y lotes del usuario ---
+      GoRoute(
+        path: AppRoutes.farmNew,
+        builder: (context, state) => const FarmFormScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.farmEdit,
+        builder: (context, state) =>
+            FarmFormScreen(farmId: state.pathParameters['farmId']!),
+      ),
+      GoRoute(
+        path: AppRoutes.farmCropNew,
+        builder: (context, state) =>
+            FarmCropFormScreen(farmId: state.pathParameters['farmId']!),
+      ),
+      GoRoute(
+        path: AppRoutes.farmCropEdit,
+        builder: (context, state) => FarmCropFormScreen(
+          farmId: state.pathParameters['farmId']!,
+          cropId: state.pathParameters['cropId']!,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.farmPlotNew,
+        builder: (context, state) => PlotFormScreen(
+          cropId: state.pathParameters['cropId']!,
+          useSupabase: true,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.farmPlotDetail,
+        builder: (context, state) =>
+            FarmPlotDetailScreen(plotId: state.pathParameters['plotId']!),
+      ),
+      GoRoute(
+        path: AppRoutes.farmDetail,
+        builder: (context, state) =>
+            FarmDetailScreen(farmId: state.pathParameters['farmId']!),
+      ),
       // IMPORTANTE: cropNew va ANTES de cropDetail
+      GoRoute(
+        path: AppRoutes.crops,
+        redirect: (context, state) => AppRoutes.farms,
+      ),
       GoRoute(
         path: AppRoutes.cropNew,
         builder: (context, state) => const CropFormScreen(),

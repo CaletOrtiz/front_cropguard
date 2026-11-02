@@ -3,12 +3,18 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kroppi/core/widgets/app_text_field.dart';
 import 'package:kroppi/core/widgets/primary_button.dart';
+import 'package:kroppi/features/farms/data/datasources/farm_remote_data_source.dart';
 import 'package:kroppi/features/my_crops/data/datasources/my_crops_remote_data_source.dart';
 
 class PlotFormScreen extends StatefulWidget {
-  const PlotFormScreen({super.key, required this.cropId});
+  const PlotFormScreen({
+    super.key,
+    required this.cropId,
+    this.useSupabase = false,
+  });
 
   final String cropId;
+  final bool useSupabase;
 
   @override
   State<PlotFormScreen> createState() => _PlotFormScreenState();
@@ -35,13 +41,27 @@ class _PlotFormScreenState extends State<PlotFormScreen> {
     if (_saving || !_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      await context.read<MyCropsRemoteDataSource>().createPlot(
-        widget.cropId,
-        name: _name.text.trim(),
-        areaHa: double.parse(_area.text.trim().replaceAll(',', '.')),
-        plantCount: int.tryParse(_plants.text.trim()),
-        variety: _variety.text.trim(),
-      );
+      final name = _name.text.trim();
+      final areaHa = double.parse(_area.text.trim().replaceAll(',', '.'));
+      final plantCount = int.tryParse(_plants.text.trim());
+      final variety = _variety.text.trim();
+      if (widget.useSupabase) {
+        await context.read<FarmRemoteDataSource>().createFarmPlot(
+          cropId: widget.cropId,
+          name: name,
+          areaHa: areaHa,
+          plantCount: plantCount,
+          variety: variety,
+        );
+      } else {
+        await context.read<MyCropsRemoteDataSource>().createPlot(
+          widget.cropId,
+          name: name,
+          areaHa: areaHa,
+          plantCount: plantCount,
+          variety: variety,
+        );
+      }
       if (mounted) context.pop(true);
     } catch (e) {
       if (!mounted) return;
@@ -84,7 +104,9 @@ class _PlotFormScreenState extends State<PlotFormScreen> {
                   final n = double.tryParse(
                     (v ?? '').trim().replaceAll(',', '.'),
                   );
-                  if (n == null || n <= 0) return 'Ingresa un área válida';
+                  if (n == null || !n.isFinite || n <= 0) {
+                    return 'Ingresa un área válida';
+                  }
                   return null;
                 },
               ),

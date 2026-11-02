@@ -51,8 +51,10 @@ feature-first. Cada funcionalidad mantiene sus capas de datos, dominio y
 presentación dentro de su propio módulo:
 
 - `features/auth/`: autenticación, repositorio, casos de uso y `AuthBloc`.
+- `features/farms/`: registro y consulta de fincas en Supabase.
 - `features/crop_diagnosis/`: análisis de imágenes y `DiagnosisBloc`.
-- `features/crops/`, `features/history/`, `features/home/` y `features/profile/`:
+- `features/my_crops/`: cultivos, lotes y muestreos.
+- `features/history/`, `features/home/` y `features/profile/`:
   pantallas, componentes y modelos pertenecientes a cada funcionalidad.
 - `core/`: componentes visuales, tema, constantes, utilidades e integraciones
   compartidas.
@@ -97,7 +99,15 @@ flutter analyze
 
 ## Configuración del backend
 
-La URL base del backend se configura en `lib/navigation/app_router.dart`. Antes de probar el diagnóstico, verifica que la dirección corresponda al servidor real y que sus endpoints coincidan con los implementados en el repositorio.
+El registro y la consulta de fincas usan el cliente Supabase inicializado en
+`lib/core/network/supabase/supabase_client.dart`. Las operaciones utilizan la
+sesión autenticada y `farms.owner_id`; Supabase debe tener políticas RLS que
+permitan al usuario autenticado leer e insertar únicamente sus propias fincas.
+El resumen consulta además las relaciones `crops.farm_id` y `plots.crop_id`.
+
+El diagnóstico de imágenes y las operaciones existentes de cultivos, lotes y
+muestreos conservan sus integraciones de backend actuales. Verifica sus URLs y
+endpoints antes de probar esos flujos.
 
 ## Estado del proyecto
 

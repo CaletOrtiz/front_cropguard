@@ -16,7 +16,7 @@ class FloatingNavBar extends StatelessWidget {
   static const _items = [
     (Icons.home_rounded, AppStrings.navHome),
     (Icons.history_rounded, AppStrings.navHistory),
-    (Icons.grass_rounded, AppStrings.navCrops),
+    (Icons.agriculture_rounded, AppStrings.navFarms),
     (Icons.person_rounded, AppStrings.navProfile),
   ];
 

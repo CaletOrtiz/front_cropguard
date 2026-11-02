@@ -33,7 +33,7 @@ class AppStrings {
   // Navegación
   static const navHome = 'Inicio';
   static const navHistory = 'Historial';
-  static const navCrops = 'Cultivos';
+  static const navFarms = 'Fincas';
   static const navProfile = 'Perfil';
 
   // Dashboard
@@ -46,6 +46,26 @@ class AppStrings {
   static const myDiagnoses = 'Mis diagnósticos';
   static const cropGuide = 'Guía de cultivos';
   static const profile = 'Perfil';
+  static const homeSummary = 'Resumen';
+  static const farms = 'Fincas';
+  static const plots = 'Lotes';
+  static const crops = 'Cultivos';
+  static const alertPlots = 'En alerta';
+  static const dangerPlots = 'En peligro';
+  static const pendingMonitoring = 'Pendientes de monitoreo';
+  static const myFarms = 'Mis fincas';
+  static const createFarm = 'Crear finca';
+  static const createFirstFarm = 'Crea tu primera finca';
+  static const noFarmsTitle = 'Aún no tienes fincas';
+  static const noFarmsSubtitle =
+      'Registra tu primera finca para empezar a monitorear tus cultivos.';
+  static const startSampling = 'Iniciar muestreo';
+  static const neverSampled = 'Nunca se ha muestreado';
+  static const reports = 'Informes';
+  static const reportsHint = 'Consulta tus diagnósticos guardados';
+
+  static String daysSinceSample(int days) =>
+      'Último muestreo hace $days ${days == 1 ? 'día' : 'días'}';
 
   // Diagnóstico
   static const takePhotoHint = 'Toma una foto clara de la hoja afectada.';
@@ -78,7 +98,6 @@ class AppStrings {
 
   // Perfil
   static const profileTitle = 'Perfil';
-  static const myCrops = 'Mis cultivos';
   static const notificationsMenu = 'Notificaciones';
   static const helpSupport = 'Ayuda y soporte';
   static const logout = 'Cerrar sesión';

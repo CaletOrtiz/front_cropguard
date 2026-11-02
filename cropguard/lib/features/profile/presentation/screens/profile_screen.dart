@@ -125,8 +125,8 @@ class ProfileScreen extends StatelessWidget {
               const SizedBox(height: 10),
               ProfileMenuTile(
                 icon: Icons.grass_rounded,
-                label: AppStrings.myCrops,
-                onTap: () => context.go(AppRoutes.crops),
+                label: AppStrings.myFarms,
+                onTap: () => context.go(AppRoutes.farms),
               ),
               const SizedBox(height: 10),
               ProfileMenuTile(
