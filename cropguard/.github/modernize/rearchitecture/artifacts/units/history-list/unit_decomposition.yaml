@@ -1,0 +1,8 @@
+unit: history-list
+commit: false
+candidate_splits:
+  - id: "lib/features/history/presentation/widgets/diagnosis_result_view.dart:1-170"
+    drivers: [concern_split, lifecycle_split]
+    rationale: >
+      The result view conflates display formatting and diagnostic detail rendering with data fetching concerns that could be separated by presentation layer.
+    source_slice: {file: "lib/features/history/presentation/widgets/diagnosis_result_view.dart", lines: [1, 170]}

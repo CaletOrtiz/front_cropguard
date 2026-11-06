@@ -1,0 +1,9 @@
+unit: auth-login
+commit: false
+candidate_splits:
+  - id: "lib/features/auth/presentation/bloc/auth_bloc.dart:17-79"
+    drivers: [concern_split, protocol_split]
+    rationale: >
+      Email login, Google login, and sign-out are all handled in the same bloc, but they differ in
+      provider protocol and result handling; they could be split into provider-specific handlers.
+    source_slice: {file: "lib/features/auth/presentation/bloc/auth_bloc.dart", lines: [17, 79]}

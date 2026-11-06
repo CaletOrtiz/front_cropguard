@@ -1,0 +1,26 @@
+unit: farm-detail
+side_effects:
+  - source_loc: "lib/features/farms/data/datasources/farm_remote_data_source.dart:39"
+    effect: "Resource aggregation joins farms, crops, crop types, and plots into one FarmDetails payload."
+    must_preserve: true
+  - source_loc: "lib/features/farms/presentation/screens/farm_detail_screen.dart:1"
+    effect: "Users navigate to crop and plot management flows from the detail view."
+    must_preserve: true
+branches:
+  - source_loc: "lib/features/farms/data/datasources/farm_remote_data_source.dart:39"
+    condition: "cropRows.isEmpty"
+    behavior: "The farm detail screen returns a valid empty crop list instead of crashing."
+    must_preserve: true
+error_paths:
+  - source_loc: "lib/features/farms/data/datasources/farm_remote_data_source.dart:46"
+    trigger: "farm not found or unauthorized access"
+    outcome: "StateError is raised when the farm cannot be resolved for the active user"
+    contract: "StateError('No se encontró la finca.')"
+    must_preserve: true
+concurrency:
+  model: "async"
+  tx_boundary:
+    source_loc: "lib/features/farms/data/datasources/farm_remote_data_source.dart:39"
+    scope: "multiple related reads from crops, crop_types, and plots are executed in one logical fetch bundle"
+    isolation: "read-only"
+    must_preserve: true

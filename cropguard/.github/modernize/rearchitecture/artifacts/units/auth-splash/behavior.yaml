@@ -1,0 +1,30 @@
+unit: auth-splash
+side_effects:
+  - source_loc: "lib/features/auth/presentation/bloc/auth_bloc.dart:22"
+    effect: "Session check reads the current authenticated user and decides whether to route home or login."
+    must_preserve: true
+  - source_loc: "lib/features/auth/data/datasources/supabase_auth_service.dart:67"
+    effect: "Supabase auth session is queried for currentUser and invalid sessions are cleared."
+    must_preserve: true
+branches:
+  - source_loc: "lib/features/auth/presentation/bloc/auth_bloc.dart:29"
+    condition: "user == null"
+    behavior: "The app emits AuthUnauthenticated and leaves the user at the welcome flow."
+    must_preserve: true
+  - source_loc: "lib/features/auth/presentation/bloc/auth_bloc.dart:31"
+    condition: "user != null"
+    behavior: "The app emits AuthAuthenticated and advances the user to the main app flow."
+    must_preserve: true
+error_paths:
+  - source_loc: "lib/features/auth/presentation/bloc/auth_bloc.dart:33"
+    trigger: "network or session error during session check"
+    outcome: "accepts unauthenticated fallback and keeps login flow available"
+    contract: "AuthUnauthenticated fallback"
+    must_preserve: true
+concurrency:
+  model: "async"
+  tx_boundary:
+    source_loc: "lib/features/auth/data/repositories/auth_repository_impl.dart:29"
+    scope: "current user session check and session invalidation are performed in a single async call"
+    isolation: "session-scoped"
+    must_preserve: true

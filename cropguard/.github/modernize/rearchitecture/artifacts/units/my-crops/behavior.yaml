@@ -1,0 +1,26 @@
+unit: my-crops
+side_effects:
+  - source_loc: "lib/features/my_crops/data/datasources/my_crops_remote_data_source.dart:1"
+    effect: "The crop and plot data layer posts and updates data through the AI backend service."
+    must_preserve: true
+  - source_loc: "lib/features/my_crops/presentation/screens/plot_detail_screen.dart:1"
+    effect: "Detailed crop and plot state is displayed with status chips and incidence charts."
+    must_preserve: true
+branches:
+  - source_loc: "lib/features/my_crops/presentation/screens/crop_detail_screen.dart:1"
+    condition: "crop or plot exists"
+    behavior: "The flow shows the corresponding record details; otherwise, the app uses the empty-state pattern."
+    must_preserve: true
+error_paths:
+  - source_loc: "lib/features/my_crops/data/datasources/my_crops_remote_data_source.dart:1"
+    trigger: "backend or session failure during crop or plot update"
+    outcome: "the request propagates a failure and the UI shows an error surface"
+    contract: "Failure subtype surfaced through the view"
+    must_preserve: true
+concurrency:
+  model: "async"
+  tx_boundary:
+    source_loc: "lib/features/my_crops/data/datasources/my_crops_remote_data_source.dart:1"
+    scope: "crop and plot fetch/update requests are treated as request-scoped async operations"
+    isolation: "single-request"
+    must_preserve: true

@@ -1,0 +1,21 @@
+unit: auth-splash
+bindings:
+  - type: "route-declaration"
+    name: "AppRoutes.splash"
+    source_loc: "lib/navigation/app_routes.dart:5"
+    target: "GoRoute(path: '/')"
+    must_appear_in_target: true
+    notes: "Initial route loads the splash screen before auth resolution."
+  - type: "state-listener"
+    name: "AuthBloc"
+    source_loc: "lib/app.dart:39"
+    target: "BlocProvider<AuthBloc>"
+    must_appear_in_target: true
+    notes: "Global auth bloc is injected before route resolution."
+runtime_config:
+  - key: "GOOGLE_WEB_CLIENT_ID"
+    source_loc: "lib/features/auth/data/datasources/supabase_auth_service.dart:10"
+    source: "env"
+    default_value: "302834720640-e91fk4kj1rnc3su728tccig6ogkisq7m.apps.googleusercontent.com"
+    must_appear_in_target: true
+    notes: "Google OAuth web client needed for Supabase auth."

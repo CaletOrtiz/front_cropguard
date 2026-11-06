@@ -1,0 +1,15 @@
+unit: farms-list
+bindings:
+  - type: "route-declaration"
+    name: "AppRoutes.farms"
+    source_loc: "lib/navigation/app_routes.dart:10"
+    target: "GoRoute(path: '/farms')"
+    must_appear_in_target: true
+    notes: "Farms tab is registered inside the indexed shell route."
+  - type: "di-registration"
+    name: "FarmRemoteDataSource"
+    source_loc: "lib/app.dart:18"
+    target: "RepositoryProvider<FarmRemoteDataSource>"
+    must_appear_in_target: true
+    notes: "The data source is injected into the farms feature and dashboard."
+runtime_config: []

@@ -1,0 +1,9 @@
+unit: auth-splash
+commit: false
+candidate_splits:
+  - id: "lib/features/auth/presentation/bloc/auth_bloc.dart:17-54"
+    drivers: [concern_split, lifecycle_split]
+    rationale: >
+      The session-check logic mixes state lifecycle and route resolution, so the auth gate and
+      the UI redirection step are distinct concerns that could be split later.
+    source_slice: {file: "lib/features/auth/presentation/bloc/auth_bloc.dart", lines: [17, 54]}

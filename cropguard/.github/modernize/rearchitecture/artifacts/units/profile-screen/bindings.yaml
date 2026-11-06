@@ -1,0 +1,15 @@
+unit: profile-screen
+bindings:
+  - type: "route-declaration"
+    name: "AppRoutes.profile"
+    source_loc: "lib/navigation/app_routes.dart:11"
+    target: "GoRoute(path: '/profile')"
+    must_appear_in_target: true
+    notes: "Profile tab is one of the authenticated shell branches."
+  - type: "di-registration"
+    name: "ProfileRepositoryImpl"
+    source_loc: "lib/features/profile/data/repositories/profile_repository_impl.dart:1"
+    target: "ProfileRepositoryImpl(profileRemoteDataSource)"
+    must_appear_in_target: true
+    notes: "The repository is the app-facing boundary for updates of personal profile data."
+runtime_config: []

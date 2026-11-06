@@ -1,0 +1,15 @@
+unit: my-crops
+bindings:
+  - type: "route-declaration"
+    name: "AppRoutes.cropDetail"
+    source_loc: "lib/navigation/app_routes.dart:32"
+    target: "GoRoute(path: '/crops/:cropId')"
+    must_appear_in_target: true
+    notes: "Crop detail screens are reached from the farm and crop navigation flows."
+  - type: "di-registration"
+    name: "MyCropsRemoteDataSource"
+    source_loc: "lib/app.dart:18"
+    target: "RepositoryProvider<MyCropsRemoteDataSource>"
+    must_appear_in_target: true
+    notes: "The data source is bound for crop and plot operations within the app runtime."
+runtime_config: []

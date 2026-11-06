@@ -1,0 +1,8 @@
+unit: diagnosis
+commit: false
+candidate_splits:
+  - id: "lib/core/network/api/services/ai_backend_service.dart:118-197"
+    drivers: [protocol_split, concern_split]
+    rationale: >
+      The service handles both multipart image upload and generic list/detail retrieval in the same class; these are different transport concerns with distinct error semantics.
+    source_slice: {file: "lib/core/network/api/services/ai_backend_service.dart", lines: [118, 197]}

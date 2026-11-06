@@ -1,0 +1,15 @@
+unit: auth-register
+bindings:
+  - type: "route-declaration"
+    name: "AppRoutes.register"
+    source_loc: "lib/navigation/app_routes.dart:7"
+    target: "GoRoute(path: '/register')"
+    must_appear_in_target: true
+    notes: "Register route for the sign-up flow."
+  - type: "sdk"
+    name: "Supabase auth signUp"
+    source_loc: "lib/features/auth/data/datasources/supabase_auth_service.dart:28"
+    target: "supabase.auth.signUp(data: full_name, ...)"
+    must_appear_in_target: true
+    notes: "Metadata keys must be preserved as they are read by Supabase profile insertion triggers."
+runtime_config: []

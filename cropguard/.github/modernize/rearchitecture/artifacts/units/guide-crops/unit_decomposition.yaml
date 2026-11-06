@@ -1,0 +1,8 @@
+unit: guide-crops
+commit: false
+candidate_splits:
+  - id: "lib/features/guide/presentation/screens/crops_screen.dart:1-170"
+    drivers: [concern_split, reuse_split]
+    rationale: >
+      Crop list and crop detail screens share presentation patterns and route metadata, but the list UI and the detail rendering are still distinct concerns.
+    source_slice: {file: "lib/features/guide/presentation/screens/crops_screen.dart", lines: [1, 170]}

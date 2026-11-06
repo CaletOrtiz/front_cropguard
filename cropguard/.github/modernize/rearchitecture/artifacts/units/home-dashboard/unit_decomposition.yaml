@@ -1,0 +1,8 @@
+unit: home-dashboard
+commit: false
+candidate_splits:
+  - id: "lib/features/home/presentation/screens/home_screen.dart:1-90"
+    drivers: [concern_split, reuse_split]
+    rationale: >
+      The home screen mixes summary widgets, action cards, and quick-access layout, which can be split into a summary view and a navigation/action layer.
+    source_slice: {file: "lib/features/home/presentation/screens/home_screen.dart", lines: [1, 90]}

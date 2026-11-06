@@ -1,0 +1,26 @@
+unit: guide-crops
+side_effects:
+  - source_loc: "lib/features/guide/presentation/screens/crops_screen.dart:1"
+    effect: "The user browses a static crop library and can drill into crop details."
+    must_preserve: true
+  - source_loc: "lib/features/guide/presentation/widgets/crop_card.dart:1"
+    effect: "Each card can launch detail navigation using the selected crop identifier."
+    must_preserve: true
+branches:
+  - source_loc: "lib/features/guide/presentation/screens/crops_screen.dart:1"
+    condition: "crop list is loaded or filtered"
+    behavior: "The screen shows a filterable library and supports navigation to crop-specific details."
+    must_preserve: true
+error_paths:
+  - source_loc: "lib/features/guide/presentation/screens/crops_screen.dart:1"
+    trigger: "search or list is empty"
+    outcome: "the UI shows a no-results or empty-state presentation"
+    contract: "UI empty state"
+    must_preserve: true
+concurrency:
+  model: "sync"
+  tx_boundary:
+    source_loc: "lib/features/guide/presentation/screens/crops_screen.dart:1"
+    scope: "view state is UI-local and does not involve backend writes or transactions"
+    isolation: "none"
+    must_preserve: true

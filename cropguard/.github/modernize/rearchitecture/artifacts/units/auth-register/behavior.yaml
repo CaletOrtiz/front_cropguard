@@ -1,0 +1,30 @@
+unit: auth-register
+side_effects:
+  - source_loc: "lib/features/auth/presentation/bloc/auth_bloc.dart:68"
+    effect: "Sign-up submits user profile metadata to Supabase and records the account as pending if confirmation is required."
+    must_preserve: true
+  - source_loc: "lib/features/auth/data/datasources/supabase_auth_service.dart:28"
+    effect: "Auth metadata is inserted into the Supabase auth user record under the public profiles trigger pattern."
+    must_preserve: true
+branches:
+  - source_loc: "lib/features/auth/presentation/bloc/auth_bloc.dart:73"
+    condition: "user == null after sign-up"
+    behavior: "The app emits AuthSignUpConfirmationRequired and asks the user to confirm their email."
+    must_preserve: true
+  - source_loc: "lib/features/auth/presentation/bloc/auth_bloc.dart:76"
+    condition: "user != null after sign-up"
+    behavior: "The app immediately authenticates the user into the app shell."
+    must_preserve: true
+error_paths:
+  - source_loc: "lib/features/auth/presentation/bloc/auth_bloc.dart:76"
+    trigger: "Supabase sign-up or validation failure"
+    outcome: "AuthFailure is presented and the user stays on register screen"
+    contract: "AuthFailure(error.toString())"
+    must_preserve: true
+concurrency:
+  model: "async"
+  tx_boundary:
+    source_loc: "lib/features/auth/data/datasources/supabase_auth_service.dart:28"
+    scope: "Auth user creation and metadata attachment occur during the same async sign-up request"
+    isolation: "session-scoped"
+    must_preserve: true

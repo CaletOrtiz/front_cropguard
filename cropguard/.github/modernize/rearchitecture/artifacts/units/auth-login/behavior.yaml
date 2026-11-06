@@ -1,0 +1,30 @@
+unit: auth-login
+side_effects:
+  - source_loc: "lib/features/auth/presentation/screens/login_screen.dart:1"
+    effect: "User enters credentials and fires AuthEmailSignInRequested or AuthGoogleSignInRequested."
+    must_preserve: true
+  - source_loc: "lib/features/auth/presentation/bloc/auth_bloc.dart:48"
+    effect: "Successful login emits AuthAuthenticated with the AppUser object."
+    must_preserve: true
+branches:
+  - source_loc: "lib/features/auth/presentation/bloc/auth_bloc.dart:48"
+    condition: "email/password login succeeds"
+    behavior: "The user is routed to the authenticated application shell."
+    must_preserve: true
+  - source_loc: "lib/features/auth/presentation/bloc/auth_bloc.dart:58"
+    condition: "Google auth succeeds"
+    behavior: "The app stores the current session and navigates to the authenticated shell."
+    must_preserve: true
+error_paths:
+  - source_loc: "lib/features/auth/presentation/bloc/auth_bloc.dart:52"
+    trigger: "credential validation or provider failure"
+    outcome: "AuthFailure is delivered and the user remains on the login screen"
+    contract: "AuthFailure(error.toString())"
+    must_preserve: true
+concurrency:
+  model: "async"
+  tx_boundary:
+    source_loc: "lib/features/auth/data/datasources/supabase_auth_service.dart:19"
+    scope: "Supabase sign-in request and session creation happen as one async auth operation"
+    isolation: "session-scoped"
+    must_preserve: true

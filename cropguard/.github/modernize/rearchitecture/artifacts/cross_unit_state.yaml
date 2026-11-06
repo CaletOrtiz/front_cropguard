@@ -1,0 +1,43 @@
+flows:
+  - name: "auth-user-session"
+    medium: session
+    key: "auth.user.id"
+    writer:
+      unit: auth-login
+      source_loc: "lib/features/auth/presentation/bloc/auth_bloc.dart:48"
+    reader:
+      unit: farms-list
+      source_loc: "lib/features/farms/data/datasources/farm_remote_data_source.dart:12"
+    pairing: matched
+    must_preserve: true
+    must_confirm: runtime
+    verification_hint: "Verify the same user id is enforced across Supabase auth.currentUser and owner_id filters in farm queries."
+    notes: "The active user identity is stored in the auth session and read by farm queries to enforce owner scoping."
+  - name: "diagnosis-user-context"
+    medium: request-attribute
+    key: "userId"
+    writer:
+      unit: auth-splash
+      source_loc: "lib/features/auth/presentation/bloc/auth_bloc.dart:29"
+    reader:
+      unit: diagnosis
+      source_loc: "lib/navigation/app_router.dart:110"
+    pairing: matched
+    must_preserve: true
+    must_confirm: runtime
+    verification_hint: "Check the userId passed from the route extra or auth state when the diagnosis screen launches."
+    notes: "The diagnosis screen receives the current user identity as route state and uses it to scope backend operations."
+  - name: "farm-summary-owner-filter"
+    medium: database
+    key: "owner_id"
+    writer:
+      unit: auth-login
+      source_loc: "lib/features/auth/data/datasources/supabase_auth_service.dart:19"
+    reader:
+      unit: home-dashboard
+      source_loc: "lib/features/home/presentation/cubit/home_cubit.dart:1"
+    pairing: matched
+    must_preserve: true
+    must_confirm: runtime
+    verification_hint: "Assert the same authenticated user is used in the Supabase query and the dashboard summary loads from the user’s farm rows."
+    notes: "Farm summary data is resolved through owner_id-based filters in the Supabase data layer."

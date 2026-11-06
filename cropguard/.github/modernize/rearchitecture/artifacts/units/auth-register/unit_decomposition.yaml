@@ -1,0 +1,8 @@
+unit: auth-register
+commit: false
+candidate_splits:
+  - id: "lib/features/auth/presentation/bloc/auth_bloc.dart:68-79"
+    drivers: [concern_split, lifecycle_split]
+    rationale: >
+      Registration includes validation, signup orchestration, and confirmation-state handling; these could be split into a dedicated signup component from the general auth state.
+    source_slice: {file: "lib/features/auth/presentation/bloc/auth_bloc.dart", lines: [68, 79]}

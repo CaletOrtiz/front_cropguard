@@ -1,0 +1,26 @@
+unit: farms-list
+side_effects:
+  - source_loc: "lib/features/farms/data/datasources/farm_remote_data_source.dart:12"
+    effect: "Farm creation writes name, area, and optional metadata to the farms table with owner_id attached."
+    must_preserve: true
+  - source_loc: "lib/features/farms/data/datasources/farm_remote_data_source.dart:30"
+    effect: "Farm listing reads the current owner’s farms and returns them as a sorted list."
+    must_preserve: true
+branches:
+  - source_loc: "lib/features/farms/data/datasources/farm_remote_data_source.dart:34"
+    condition: "user has farms or no farms historical data"
+    behavior: "The UI renders either a list or an empty state depending on query results."
+    must_preserve: true
+error_paths:
+  - source_loc: "lib/features/farms/data/datasources/farm_remote_data_source.dart:15"
+    trigger: "user has no valid authenticated session or ownership mismatch"
+    outcome: "StateError is thrown when a farm or owner_id cannot be resolved"
+    contract: "StateError('No se encontró la finca.')"
+    must_preserve: true
+concurrency:
+  model: "async"
+  tx_boundary:
+    source_loc: "lib/features/farms/data/datasources/farm_remote_data_source.dart:13"
+    scope: "farm row writes and updates are atomic single-row inserts/updates scoped to owner_id"
+    isolation: "row-scoped"
+    must_preserve: true

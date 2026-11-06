@@ -1,0 +1,8 @@
+unit: farms-list
+commit: false
+candidate_splits:
+  - id: "lib/features/farms/data/datasources/farm_remote_data_source.dart:7-211"
+    drivers: [concern_split, data_ownership_split]
+    rationale: >
+      The data source handles farm CRUD, crop lookups, and plot queries in the same class; ownership and child-entity reads belong to separate domain slices.
+    source_slice: {file: "lib/features/farms/data/datasources/farm_remote_data_source.dart", lines: [7, 211]}

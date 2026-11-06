@@ -1,0 +1,8 @@
+unit: my-crops
+commit: false
+candidate_splits:
+  - id: "lib/features/my_crops/presentation/screens/plot_detail_screen.dart:1-220"
+    drivers: [concern_split, lifecycle_split]
+    rationale: >
+      Plot detail pages combine status display, chart rendering, and record management actions; these concerns are distinct enough to merit separate presentation modules.
+    source_slice: {file: "lib/features/my_crops/presentation/screens/plot_detail_screen.dart", lines: [1, 220]}

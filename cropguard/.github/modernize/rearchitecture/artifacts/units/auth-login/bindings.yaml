@@ -1,0 +1,27 @@
+unit: auth-login
+bindings:
+  - type: "route-declaration"
+    name: "AppRoutes.login"
+    source_loc: "lib/navigation/app_routes.dart:6"
+    target: "GoRoute(path: '/login')"
+    must_appear_in_target: true
+    notes: "Login route navigation target for unauthenticated state."
+  - type: "di-registration"
+    name: "AuthBloc"
+    source_loc: "lib/app.dart:39"
+    target: "BlocProvider<AuthBloc>"
+    must_appear_in_target: true
+    notes: "AuthBloc is global to the app and process login state changes."
+  - type: "sdk"
+    name: "GoogleSignIn"
+    source_loc: "lib/features/auth/data/datasources/supabase_auth_service.dart:8"
+    target: "GoogleSignIn.instance"
+    must_appear_in_target: true
+    notes: "Google OAuth provider is initialized with the web and iOS client IDs."
+runtime_config:
+  - key: "GOOGLE_WEB_CLIENT_ID"
+    source_loc: "lib/features/auth/data/datasources/supabase_auth_service.dart:10"
+    source: "env"
+    default_value: "302834720640-e91fk4kj1rnc3su728tccig6ogkisq7m.apps.googleusercontent.com"
+    must_appear_in_target: true
+    notes: "Needed for Google Sign-In when using Supabase auth."

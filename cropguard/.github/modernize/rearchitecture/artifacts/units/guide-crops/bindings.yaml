@@ -1,0 +1,15 @@
+unit: guide-crops
+bindings:
+  - type: "route-declaration"
+    name: "AppRoutes.guide"
+    source_loc: "lib/navigation/app_routes.dart:40"
+    target: "GoRoute(path: '/guide')"
+    must_appear_in_target: true
+    notes: "Static guide screens are part of the app navigation tree."
+  - type: "route-declaration"
+    name: "AppRoutes.guideDetail"
+    source_loc: "lib/navigation/app_routes.dart:41"
+    target: "GoRoute(path: '/guide/:cropId')"
+    must_appear_in_target: true
+    notes: "Detail route identifies the selected crop library item."
+runtime_config: []

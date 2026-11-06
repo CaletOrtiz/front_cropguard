@@ -1,0 +1,15 @@
+unit: history-list
+bindings:
+  - type: "route-declaration"
+    name: "AppRoutes.history"
+    source_loc: "lib/navigation/app_routes.dart:9"
+    target: "GoRoute(path: '/history')"
+    must_appear_in_target: true
+    notes: "History tab sits in the main indexed shell and stays in the authenticated app flow."
+  - type: "di-registration"
+    name: "HistoryCubit"
+    source_loc: "lib/navigation/app_router.dart:89"
+    target: "BlocProvider(create: (_) => HistoryCubit(...))"
+    must_appear_in_target: true
+    notes: "The history screen is initialized with a use case backed by the history repository."
+runtime_config: []

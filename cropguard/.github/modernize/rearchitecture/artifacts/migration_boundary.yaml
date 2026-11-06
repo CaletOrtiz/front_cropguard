@@ -1,0 +1,28 @@
+user_intent:
+  raw_request: "Flutter app architecture analysis for feature-first migration readiness."
+  inferred_acceptance: ["preserve app behavior", "keep authenticated user context intact", "maintain external contracts with Supabase and FastAPI"]
+  cleanup_required: false
+strategy: minimal_runtime
+runtime_reachable:
+  - lib/main.dart
+  - lib/app.dart
+  - lib/navigation/app_router.dart
+  - lib/navigation/presentation/shell/main_shell.dart
+must_rewrite:
+  - path: lib/app.dart
+    reason: "The application root wires global providers, auth state, and feature-scoped dependency injection."
+  - path: lib/navigation/app_router.dart
+    reason: "Route branching and screen composition are the runtime entry points for every authenticated and unauthenticated flow."
+  - path: lib/features/auth/presentation/bloc/auth_bloc.dart
+    reason: "Authentication state is the cross-feature gate that determines whether the app enters the authenticated shell."
+copy_as_is:
+  - lib/core/network/supabase/supabase_client.dart
+  - lib/core/network/api/fastapi_client.dart
+legacy_allowed_to_remain:
+  - lib/features/guide/presentation/widgets/crop_card.dart
+  - lib/core/widgets/placeholder_screen.dart
+defer_cleanup:
+  - "Remove unused legacy UI helpers after the runtime cutover is confirmed."
+full_rewrite_reason: null
+implementation_rule: >
+  Implementation tasks use must_rewrite plus copy_as_is as needed. They must not infer rewrite scope from every feature file or every legacy screen.

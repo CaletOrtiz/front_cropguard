@@ -1,0 +1,30 @@
+unit: home-dashboard
+side_effects:
+  - source_loc: "lib/features/home/presentation/cubit/home_cubit.dart:1"
+    effect: "The dashboard loads the farm snapshot and emits the dashboard state for the current user."
+    must_preserve: true
+  - source_loc: "lib/features/home/presentation/screens/home_screen.dart:1"
+    effect: "Cards such as quick access and pending sampling are rendered from the loaded state."
+    must_preserve: true
+branches:
+  - source_loc: "lib/features/home/presentation/screens/home_screen.dart:1"
+    condition: "dashboard data has not loaded yet"
+    behavior: "The screen shows loading or placeholder UI while context is being fetched."
+    must_preserve: true
+  - source_loc: "lib/features/home/presentation/screens/home_screen.dart:1"
+    condition: "dashboard summary is available"
+    behavior: "The home screen renders summary widgets with farm and crop context."
+    must_preserve: true
+error_paths:
+  - source_loc: "lib/features/home/presentation/cubit/home_cubit.dart:1"
+    trigger: "farm load failure or empty dataset"
+    outcome: "empty-state or fallback summary widgets present in the dashboard"
+    contract: "empty state UI"
+    must_preserve: true
+concurrency:
+  model: "async"
+  tx_boundary:
+    source_loc: "lib/features/farms/data/datasources/farm_remote_data_source.dart:8"
+    scope: "farm row reads are single-query async reads scoped to the authenticated owner_id"
+    isolation: "read-only"
+    must_preserve: true

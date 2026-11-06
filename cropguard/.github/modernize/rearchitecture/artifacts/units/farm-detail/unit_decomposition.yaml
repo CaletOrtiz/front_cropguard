@@ -1,0 +1,8 @@
+unit: farm-detail
+commit: false
+candidate_splits:
+  - id: "lib/features/farms/data/datasources/farm_remote_data_source.dart:39-97"
+    drivers: [data_ownership_split, reuse_split]
+    rationale: >
+      The method aggregates farm data with related crop and plot rows; a split between farm metadata and nested crop records would separate different responsibilities.
+    source_slice: {file: "lib/features/farms/data/datasources/farm_remote_data_source.dart", lines: [39, 97]}

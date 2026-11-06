@@ -1,0 +1,26 @@
+unit: history-list
+side_effects:
+  - source_loc: "lib/features/history/presentation/cubit/history_cubit.dart:1"
+    effect: "Loads previous diagnosis rows into the UI state for the authenticated user."
+    must_preserve: true
+  - source_loc: "lib/features/history/data/repositories/history_repository_impl.dart:1"
+    effect: "History records are cached or returned to the screen as domain models."
+    must_preserve: true
+branches:
+  - source_loc: "lib/features/history/presentation/screens/history_screen.dart:1"
+    condition: "diagnosis list is empty"
+    behavior: "The screen shows an empty-state message and advises the user to add a diagnosis."
+    must_preserve: true
+error_paths:
+  - source_loc: "lib/features/history/data/datasources/history_remote_data_source.dart:1"
+    trigger: "backend fetch error or unauthorized session"
+    outcome: "error is surfaced through the history state and UI surface"
+    contract: "Failure subtype surfaced as UI error"
+    must_preserve: true
+concurrency:
+  model: "async"
+  tx_boundary:
+    source_loc: "lib/features/history/data/datasources/history_remote_data_source.dart:1"
+    scope: "diagnosis list fetch is a single read-only async data query for the current user"
+    isolation: "read-only"
+    must_preserve: true

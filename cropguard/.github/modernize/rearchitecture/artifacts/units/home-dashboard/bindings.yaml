@@ -1,0 +1,15 @@
+unit: home-dashboard
+bindings:
+  - type: "route-declaration"
+    name: "AppRoutes.home"
+    source_loc: "lib/navigation/app_routes.dart:12"
+    target: "GoRoute(path: '/home')"
+    must_appear_in_target: true
+    notes: "Home route is the primary authenticated top-level tab."
+  - type: "di-registration"
+    name: "HomeCubit"
+    source_loc: "lib/navigation/app_router.dart:70"
+    target: "BlocProvider(create: (_) => HomeCubit(...))"
+    must_appear_in_target: true
+    notes: "Cubit is created in the indexed shell branch and bound to the route."
+runtime_config: []

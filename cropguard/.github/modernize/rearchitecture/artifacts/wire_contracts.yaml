@@ -1,0 +1,77 @@
+contracts:
+  - name: "supabase-google-auth"
+    unit: auth-login
+    type: sdk
+    stability: must_preserve
+    source_loc: "lib/features/auth/data/datasources/supabase_auth_service.dart:8"
+    contract:
+      method: "GoogleSignIn.authenticate + Supabase signInWithIdToken"
+      path: "OAuthProvider.google"
+      request: "Google ID token included with web/iOS client configuration"
+      response: "Supabase AuthResponse with authenticated user session"
+      error: "AuthException when idToken is unavailable or provider fails"
+      auth: "OAuthProvider.google"
+    target_contract:
+      method: "signInWithIdToken(provider: OAuthProvider.google, idToken: String)"
+      notes: "Preserve the Google OAuth flow and identified user session processed by Supabase."
+    semantic_divergence:
+      - field: "idToken"
+        issue: "Token acquisition differs between web and native flows, but the authenticated session semantics remain the same."
+        source_loc: "lib/features/auth/data/datasources/supabase_auth_service.dart:34"
+  - name: "fastapi-diagnosis-upload"
+    unit: diagnosis
+    type: rest
+    stability: frozen
+    source_loc: "lib/core/network/api/services/ai_backend_service.dart:118"
+    contract:
+      method: "POST"
+      path: "/diagnoses"
+      request: "multipart/form-data file + crop_slug + optional plot_id + latitude/longitude"
+      response: "JSON diagnosis payload with diseaseName, scientificName, confidence, and recommendations"
+      error: "NetworkFailure, AuthFailure, NotFoundFailure, ServerFailure"
+      auth: "Bearer token via FastAPI client"
+    target_contract:
+      method: "createDiagnosis(imageFile: XFile, cropSlug: String, plotId: String?, latitude: double?, longitude: double?)"
+      notes: "The multipart upload contract and optional metadata fields must remain stable for the backend response contract."
+    semantic_divergence:
+      - field: "file"
+        issue: "The uploaded file is encoded as multipart bytes and may differ by platform, so content-type and image metadata must match the backend contract."
+        source_loc: "lib/core/network/api/services/ai_backend_service.dart:134"
+  - name: "supabase-farms-ownership-query"
+    unit: farms-list
+    type: sql
+    stability: must_preserve
+    source_loc: "lib/features/farms/data/datasources/farm_remote_data_source.dart:8"
+    contract:
+      method: "SELECT + owner_id filter"
+      path: "farms, crops, crop_types, plots"
+      request: "authenticated user and farm or crop identifiers"
+      response: "farm list and nested crop/plot rows scoped to the active user"
+      error: "StateError when row or ownership check fails"
+      auth: "Supabase session context"
+    target_contract:
+      method: "getFarms() -> List<Farm>; getFarmDetails(farmId) -> FarmDetails"
+      notes: "The owner_id filter is required to preserve the same data ownership contract across the app."
+    semantic_divergence:
+      - field: "owner_id"
+        issue: "Supabase row ownership is enforced by the authenticated session; the source app uses this as an implicit domain boundary."
+        source_loc: "lib/features/farms/data/datasources/farm_remote_data_source.dart:12"
+  - name: "supabase-history-read"
+    unit: history-list
+    type: sql
+    stability: must_preserve
+    source_loc: "lib/features/history/data/datasources/history_remote_data_source.dart:1"
+    contract:
+      method: "GET"
+      path: "diagnosis history by current user"
+      request: "limit and offset or diagnosis id"
+      response: "diagnosis list or specific diagnosis record"
+      error: "Failure subtype surfaced to UI"
+      auth: "authenticated Supabase session"
+    target_contract:
+      method: "getDiagnoses(limit: int, offset: int) -> List<DiagnosisRecord>; getDiagnosisById(id: String) -> DiagnosisRecord"
+      notes: "The list and detail record semantics must be preserved across any migration of the history backend."
+    semantic_divergence:
+      - field: "diagnosisId"
+        issue: "Path and record IDs are expected to remain stable across the client and backend contract; ID format should not be reinterpreted."
+        source_loc: "lib/features/history/presentation/screens/diagnosis_detail_screen.dart:1"

@@ -1,0 +1,27 @@
+unit: diagnosis
+bindings:
+  - type: "route-declaration"
+    name: "AppRoutes.diagnose"
+    source_loc: "lib/navigation/app_routes.dart:26"
+    target: "GoRoute(path: '/diagnose')"
+    must_appear_in_target: true
+    notes: "Full-screen diagnosis route is reached from the authenticated app shell."
+  - type: "di-registration"
+    name: "AnalyzeCropImageUsecase"
+    source_loc: "lib/app.dart:15"
+    target: "RepositoryProvider<AnalyzeCropImageUsecase>"
+    must_appear_in_target: true
+    notes: "Use case is bound at app startup and supplied to the diagnosis bloc."
+  - type: "sdk"
+    name: "ImagePicker"
+    source_loc: "lib/features/crop_diagnosis/presentation/services/image_picker_service.dart"
+    target: "ImagePicker().pickImage(...)"
+    must_appear_in_target: true
+    notes: "Camera and gallery selection are part of the image intake UX."
+runtime_config:
+  - key: "FASTAPI_BASE_URL"
+    source_loc: "lib/core/network/api/fastapi_client.dart:1"
+    source: "code"
+    default_value: "https://api/"
+    must_appear_in_target: true
+    notes: "Backend endpoint base is configured in the FastAPI client used by the diagnosis service."

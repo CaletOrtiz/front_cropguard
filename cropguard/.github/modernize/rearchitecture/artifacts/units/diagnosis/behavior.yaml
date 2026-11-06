@@ -1,0 +1,30 @@
+unit: diagnosis
+side_effects:
+  - source_loc: "lib/features/crop_diagnosis/presentation/screens/diagnosis_screen.dart:18"
+    effect: "The user chooses a camera or gallery source to attach a file for AI diagnosis."
+    must_preserve: true
+  - source_loc: "lib/core/network/api/services/ai_backend_service.dart:118"
+    effect: "Multipart form-data is sent to the backend with the image and crop metadata."
+    must_preserve: true
+branches:
+  - source_loc: "lib/features/crop_diagnosis/presentation/screens/diagnosis_screen.dart:44"
+    condition: "image was picked successfully"
+    behavior: "The selected image is submitted to DiagnosisBloc for analysis."
+    must_preserve: true
+  - source_loc: "lib/features/crop_diagnosis/presentation/screens/diagnosis_screen.dart:89"
+    condition: "DiagnosisSuccessState arrives"
+    behavior: "The screen displays disease, confidence, and recommendations."
+    must_preserve: true
+error_paths:
+  - source_loc: "lib/core/network/api/services/ai_backend_service.dart:31"
+    trigger: "connection timeout, authentication error, 404, or server error"
+    outcome: "a Failure subtype is raised and the UI displays an error message"
+    contract: "NetworkFailure | AuthFailure | NotFoundFailure | ServerFailure"
+    must_preserve: true
+concurrency:
+  model: "async"
+  tx_boundary:
+    source_loc: "lib/core/network/api/services/ai_backend_service.dart:118"
+    scope: "multipart upload and backend response are treated as one async network operation"
+    isolation: "request-scoped"
+    must_preserve: true

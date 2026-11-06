@@ -1,0 +1,30 @@
+unit: profile-screen
+side_effects:
+  - source_loc: "lib/features/profile/presentation/cubit/edit_profile_cubit.dart:1"
+    effect: "Profile updates persist the user’s personal information from the UI to the backend or Supabase profile table."
+    must_preserve: true
+  - source_loc: "lib/features/profile/presentation/screens/profile_screen.dart:1"
+    effect: "Profile options such as personal data and sign out are presented from the current user state."
+    must_preserve: true
+branches:
+  - source_loc: "lib/features/profile/presentation/cubit/edit_profile_cubit.dart:1"
+    condition: "profile update succeeds"
+    behavior: "The local user state is refreshed and the profile data is displayed with the new values."
+    must_preserve: true
+  - source_loc: "lib/features/profile/presentation/cubit/edit_profile_cubit.dart:1"
+    condition: "profile update fails"
+    behavior: "An error state is emitted to make the underlying problem visible to the user."
+    must_preserve: true
+error_paths:
+  - source_loc: "lib/features/profile/data/repositories/profile_repository_impl.dart:1"
+    trigger: "backend or validation failure"
+    outcome: "profile update surfaces a user-facing error without deleting the previous state"
+    contract: "Failure subtype surfaced in UI"
+    must_preserve: true
+concurrency:
+  model: "async"
+  tx_boundary:
+    source_loc: "lib/features/profile/data/repositories/profile_repository_impl.dart:1"
+    scope: "personal data update is a single async operation scoped to the active user"
+    isolation: "user-scoped"
+    must_preserve: true

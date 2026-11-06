@@ -1,0 +1,168 @@
+modules:
+  - name: supabase-client
+    kind: config
+    source_loc: "lib/core/network/supabase/supabase_client.dart:1"
+    used_by_units:
+      - auth-splash
+      - auth-login
+      - auth-register
+      - farms-list
+      - farm-detail
+      - history-list
+      - profile-screen
+      - my-crops
+    fields:
+      - name: client
+        type: "SupabaseClient"
+      - name: auth
+        type: "SupabaseAuthClient"
+      - name: from
+        type: "PostgrestFilterBuilder"
+    god_class: false
+    split_candidate: false
+    migration_strategy: copy
+    notes: "Singleton Supabase client used by multiple features for auth and data access."
+  - name: auth-state
+    kind: store
+    source_loc: "lib/features/auth/presentation/bloc/auth_bloc.dart:1"
+    used_by_units:
+      - auth-splash
+      - auth-login
+      - auth-register
+      - profile-screen
+    fields:
+      - name: AuthBloc
+        type: "Bloc<AuthEvent, AuthState>"
+      - name: AuthAuthenticated
+        type: "AuthState"
+      - name: AuthUnauthenticated
+        type: "AuthState"
+      - name: AuthFailure
+        type: "AuthState"
+    god_class: false
+    split_candidate: false
+    migration_strategy: wrap
+    notes: "A shared authentication state store controlling route and session semantics."
+  - name: fastapi-client
+    kind: config
+    source_loc: "lib/core/network/api/fastapi_client.dart:1"
+    used_by_units:
+      - diagnosis
+      - history-list
+      - my-crops
+    fields:
+      - name: client
+        type: "Dio"
+      - name: get
+        type: "Future<Response>"
+      - name: post
+        type: "Future<Response>"
+      - name: request
+        type: "Future<Response>"
+    god_class: false
+    split_candidate: false
+    migration_strategy: copy
+    notes: "Shared HTTP abstraction used by AI diagnostics and history queries."
+  - name: ai-backend-service
+    kind: god-class
+    source_loc: "lib/core/network/api/services/ai_backend_service.dart:1"
+    used_by_units:
+      - diagnosis
+      - history-list
+      - my-crops
+    fields:
+      - name: createDiagnosis
+        type: "Future<Map<String, dynamic>>"
+      - name: getDiagnoses
+        type: "Future<List<Map<String, dynamic>>>"
+      - name: getDiagnosisById
+        type: "Future<Map<String, dynamic>>"
+      - name: send
+        type: "Future<dynamic>"
+    god_class: true
+    split_candidate: true
+    migration_strategy: split
+    notes: "The service mixes diagnosis upload, diagnosis list fetch, and generic backend request logic in a single class."
+  - name: farm-remote-data-source
+    kind: dto
+    source_loc: "lib/features/farms/data/datasources/farm_remote_data_source.dart:1"
+    used_by_units:
+      - farms-list
+      - farm-detail
+      - home-dashboard
+      - my-crops
+    fields:
+      - name: getFarms
+        type: "Future<List<Farm>>"
+      - name: getFarmDetails
+        type: "Future<FarmDetails>"
+      - name: getFarmCrop
+        type: "Future<FarmCrop>"
+      - name: getFarmPlot
+        type: "Future<FarmPlot>"
+      - name: createFarm
+        type: "Future<void>"
+      - name: updateFarm
+        type: "Future<void>"
+    god_class: false
+    split_candidate: true
+    migration_strategy: split
+    notes: "Reads and writes farms, crops, and plots with overlapping ownership filters."
+  - name: history-remote-data-source
+    kind: dto
+    source_loc: "lib/features/history/data/datasources/history_remote_data_source.dart:1"
+    used_by_units:
+      - history-list
+      - diagnosis
+    fields:
+      - name: getDiagnoses
+        type: "Future<List<DiagnosisRecord>>"
+      - name: getDiagnosisById
+        type: "Future<DiagnosisRecord>"
+    god_class: false
+    split_candidate: false
+    migration_strategy: copy
+    notes: "Shared read-only history access for diagnosis records."
+  - name: profile-remote-data-source
+    kind: dto
+    source_loc: "lib/features/profile/data/datasources/profile_remote_data_source.dart:1"
+    used_by_units:
+      - profile-screen
+      - auth-login
+    fields:
+      - name: updateProfile
+        type: "Future<void>"
+      - name: fetchProfile
+        type: "Future<Map<String,dynamic>?>"
+    god_class: false
+    split_candidate: false
+    migration_strategy: copy
+    notes: "Single-user profile update service. Shared across profile maintenance and the authenticated login flow that hydrates the active user."
+  - name: app-router
+    kind: config
+    source_loc: "lib/navigation/app_router.dart:1"
+    used_by_units:
+      - auth-splash
+      - home-dashboard
+      - farms-list
+      - farm-detail
+      - diagnosis
+      - history-list
+      - guide-crops
+      - profile-screen
+      - my-crops
+    fields:
+      - name: AppRoutes.home
+        type: "String"
+      - name: AppRoutes.diagnose
+        type: "String"
+      - name: AppRoutes.farms
+        type: "String"
+      - name: AppRoutes.history
+        type: "String"
+      - name: AppRoutes.profile
+        type: "String"
+    god_class: false
+    split_candidate: false
+    migration_strategy: copy
+    notes: "Global route table used to coordinate view transitions across the shell and full-screen flows."

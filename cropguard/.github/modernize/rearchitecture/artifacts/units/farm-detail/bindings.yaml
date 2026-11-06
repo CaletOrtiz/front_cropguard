@@ -1,0 +1,15 @@
+unit: farm-detail
+bindings:
+  - type: "route-declaration"
+    name: "AppRoutes.farmDetail"
+    source_loc: "lib/navigation/app_routes.dart:22"
+    target: "GoRoute(path: '/farms/:farmId')"
+    must_appear_in_target: true
+    notes: "Route parameter carries the selected farm ID into the detail view."
+  - type: "sql"
+    name: "farms + crops + plots"
+    source_loc: "lib/features/farms/data/datasources/farm_remote_data_source.dart:39"
+    target: "SELECT farms ... JOIN crops... JOIN plots... WHERE owner_id = currentUser"
+    must_appear_in_target: true
+    notes: "The relationship contract is enforced by the current owner_id filter and children join."
+runtime_config: []

@@ -1,0 +1,8 @@
+unit: profile-screen
+commit: false
+candidate_splits:
+  - id: "lib/features/profile/presentation/screens/profile_screen.dart:1-180"
+    drivers: [concern_split, lifecycle_split]
+    rationale: >
+      The profile screen combines menu rendering, edit-profile navigation, and sign-out behavior; these are separate actions and should remain conceptually separated.
+    source_slice: {file: "lib/features/profile/presentation/screens/profile_screen.dart", lines: [1, 180]}

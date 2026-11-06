@@ -1,0 +1,345 @@
+units:
+  - name: auth-splash
+    trigger: page
+    trigger_detail: "Splash screen starts an auth session check before routing to login or home."
+    source_anchors:
+      - path: lib/features/auth/presentation/screens/splash/splash_screen.dart
+        line: 1
+      - path: lib/features/auth/presentation/bloc/auth_bloc.dart
+        line: 17
+    exported_signature:
+      - method: "AuthBloc.onSessionCheckRequested"
+        source_loc: "lib/features/auth/presentation/bloc/auth_bloc.dart:37"
+        stability: must_preserve
+      - method: "SplashScreen.build"
+        source_loc: "lib/features/auth/presentation/screens/splash/splash_screen.dart:1"
+        stability: may_change
+    dynamic_entrypoints:
+    depends_on:
+      - unit: auth-login
+        via: "AuthBloc state transition to LoginScreen"
+      - unit: home-dashboard
+        via: "redirect after successful authenticated session"
+    shared_refs:
+      - module: supabase-client
+        used_fields:
+          - client
+          - auth
+      - module: auth-state
+        used_fields:
+          - AuthBloc
+          - AuthAuthenticated
+          - AuthUnauthenticated
+  - name: auth-login
+    trigger: page
+    trigger_detail: "Login screen authenticates a user through email/password or Google OAuth."
+    source_anchors:
+      - path: lib/features/auth/presentation/screens/login_screen.dart
+        line: 1
+      - path: lib/features/auth/data/datasources/supabase_auth_service.dart
+        line: 1
+    exported_signature:
+      - method: "AuthBloc.onEmailSignInRequested"
+        source_loc: "lib/features/auth/presentation/bloc/auth_bloc.dart:48"
+        stability: must_preserve
+      - method: "AuthBloc.onGoogleSignInRequested"
+        source_loc: "lib/features/auth/presentation/bloc/auth_bloc.dart:58"
+        stability: must_preserve
+    dynamic_entrypoints:
+    depends_on:
+      - unit: auth-splash
+        via: "AuthBloc state hydration"
+      - unit: home-dashboard
+        via: "successful login leads to authenticated home route"
+    shared_refs:
+      - module: supabase-client
+        used_fields:
+          - auth
+          - from
+      - module: auth-state
+        used_fields:
+          - AuthBloc
+          - AuthAuthenticated
+          - AuthFailure
+  - name: auth-register
+    trigger: page
+    trigger_detail: "Register screen submits sign-up parameters and reconciles the user profile with Supabase metadata."
+    source_anchors:
+      - path: lib/features/auth/presentation/screens/register_screen.dart
+        line: 1
+      - path: lib/features/auth/domain/entities/sign_up_params.dart
+        line: 1
+    exported_signature:
+      - method: "AuthBloc.onEmailSignUpRequested"
+        source_loc: "lib/features/auth/presentation/bloc/auth_bloc.dart:68"
+        stability: must_preserve
+      - method: "SignUpParams"
+        source_loc: "lib/features/auth/domain/entities/sign_up_params.dart:1"
+        stability: must_preserve
+    dynamic_entrypoints:
+    depends_on:
+      - unit: auth-login
+        via: "common auth flow and session checks"
+      - unit: auth-splash
+        via: "recovers session after signup confirmation"
+    shared_refs:
+      - module: supabase-client
+        used_fields:
+          - auth
+      - module: auth-state
+        used_fields:
+          - AuthBloc
+          - AuthSignUpConfirmationRequired
+  - name: home-dashboard
+    trigger: page
+    trigger_detail: "Home dashboard shows summary cards and loads the current farm and crop data."
+    source_anchors:
+      - path: lib/features/home/presentation/screens/home_screen.dart
+        line: 1
+      - path: lib/features/home/presentation/cubit/home_cubit.dart
+        line: 1
+    exported_signature:
+      - method: "HomeCubit.load"
+        source_loc: "lib/features/home/presentation/cubit/home_cubit.dart:1"
+        stability: must_preserve
+      - method: "HomeScreen.build"
+        source_loc: "lib/features/home/presentation/screens/home_screen.dart:1"
+        stability: may_change
+    dynamic_entrypoints:
+    depends_on:
+      - unit: farms-list
+        via: "farm summary calls from the home dashboard"
+      - unit: auth-splash
+        via: "authenticated user context"
+    shared_refs:
+      - module: farm-remote-data-source
+        used_fields:
+          - getFarms
+          - getFarmDetails
+      - module: supabase-client
+        used_fields:
+          - from
+      - module: app-router
+        used_fields:
+          - AppRoutes.home
+  - name: farms-list
+    trigger: page
+    trigger_detail: "Farms view lists a user’s farms, creates a new farm, and opens farm detail screens."
+    source_anchors:
+      - path: lib/features/farms/presentation/screens/farms_screen.dart
+        line: 1
+      - path: lib/features/farms/presentation/cubit/farms_cubit.dart
+        line: 1
+    exported_signature:
+      - method: "FarmsCubit.load"
+        source_loc: "lib/features/farms/presentation/cubit/farms_cubit.dart:1"
+        stability: must_preserve
+      - method: "FarmRemoteDataSource.getFarms"
+        source_loc: "lib/features/farms/data/datasources/farm_remote_data_source.dart:34"
+        stability: must_preserve
+    dynamic_entrypoints:
+    depends_on:
+      - unit: auth-splash
+        via: "owner_id from current auth session"
+      - unit: home-dashboard
+        via: "farm snapshot reads"
+    shared_refs:
+      - module: supabase-client
+        used_fields:
+          - from
+          - eq
+      - module: farm-remote-data-source
+        used_fields:
+          - getFarms
+          - createFarm
+          - updateFarm
+  - name: farm-detail
+    trigger: page
+    trigger_detail: "Farm detail screen loads farm metadata, crop rows, and plot relationships."
+    source_anchors:
+      - path: lib/features/farms/presentation/screens/farm_detail_screen.dart
+        line: 1
+      - path: lib/features/farms/data/datasources/farm_remote_data_source.dart
+        line: 34
+    exported_signature:
+      - method: "FarmRemoteDataSource.getFarmDetails"
+        source_loc: "lib/features/farms/data/datasources/farm_remote_data_source.dart:39"
+        stability: must_preserve
+      - method: "FarmDetailScreen.build"
+        source_loc: "lib/features/farms/presentation/screens/farm_detail_screen.dart:1"
+        stability: may_change
+    dynamic_entrypoints:
+    depends_on:
+      - unit: farms-list
+        via: "farm index navigation"
+      - unit: my-crops
+        via: "crop and plot entity reuse"
+    shared_refs:
+      - module: farm-remote-data-source
+        used_fields:
+          - getFarm
+          - getFarmDetails
+          - getFarmCrop
+          - getFarmPlot
+      - module: supabase-client
+        used_fields:
+          - from
+          - inFilter
+      - module: app-router
+        used_fields:
+          - farmDetailPath
+  - name: diagnosis
+    trigger: page
+    trigger_detail: "Diagnosis flow lets the user capture an image, send it to the FastAPI backend, and render disease results."
+    source_anchors:
+      - path: lib/features/crop_diagnosis/presentation/screens/diagnosis_screen.dart
+        line: 1
+      - path: lib/features/crop_diagnosis/presentation/bloc/diagnosis_bloc.dart
+        line: 1
+    exported_signature:
+      - method: "DiagnosisBloc.onAnalyzeImageSubmitted"
+        source_loc: "lib/features/crop_diagnosis/presentation/bloc/diagnosis_bloc.dart:1"
+        stability: must_preserve
+      - method: "AiBackendService.createDiagnosis"
+        source_loc: "lib/core/network/api/services/ai_backend_service.dart:118"
+        stability: must_preserve
+    dynamic_entrypoints:
+    depends_on:
+      - unit: auth-splash
+        via: "authenticated user ID is passed into the diagnosis view"
+    shared_refs:
+      - module: fastapi-client
+        used_fields:
+          - client
+          - post
+          - get
+      - module: ai-backend-service
+        used_fields:
+          - createDiagnosis
+          - getDiagnosisById
+          - getDiagnoses
+      - module: app-router
+        used_fields:
+          - AppRoutes.diagnose
+  - name: history-list
+    trigger: page
+    trigger_detail: "History screen lists previous diagnoses and opens a detail view for a selected record."
+    source_anchors:
+      - path: lib/features/history/presentation/screens/history_screen.dart
+        line: 1
+      - path: lib/features/history/presentation/cubit/history_cubit.dart
+        line: 1
+    exported_signature:
+      - method: "HistoryCubit.load"
+        source_loc: "lib/features/history/presentation/cubit/history_cubit.dart:1"
+        stability: must_preserve
+      - method: "HistoryRemoteDataSource.getDiagnoses"
+        source_loc: "lib/features/history/data/datasources/history_remote_data_source.dart:1"
+        stability: must_preserve
+    dynamic_entrypoints:
+    depends_on:
+      - unit: diagnosis
+        via: "diagnosis records are fetched from the same backend contract"
+      - unit: auth-splash
+        via: "session-scoped history queries"
+    shared_refs:
+      - module: fastapi-client
+        used_fields:
+          - get
+          - request
+      - module: history-remote-data-source
+        used_fields:
+          - getDiagnoses
+          - getDiagnosisById
+      - module: app-router
+        used_fields:
+          - AppRoutes.history
+  - name: my-crops
+    trigger: page
+    trigger_detail: "My crops screens manage crop and plot records for the current user and their assigned farm."
+    source_anchors:
+      - path: lib/features/my_crops/presentation/screens/crop_detail_screen.dart
+        line: 1
+      - path: lib/features/my_crops/presentation/screens/plot_detail_screen.dart
+        line: 1
+    exported_signature:
+      - method: "PlotDetailCubit.load"
+        source_loc: "lib/features/my_crops/presentation/cubit/plot_detail_cubit.dart:1"
+        stability: must_preserve
+      - method: "MyCropsRemoteDataSource.send"
+        source_loc: "lib/features/my_crops/data/datasources/my_crops_remote_data_source.dart:1"
+        stability: must_preserve
+    dynamic_entrypoints:
+    depends_on:
+      - unit: farm-detail
+        via: "fetched crop and plot data"
+      - unit: diagnosis
+        via: "plot-scoped diagnosis flow"
+    shared_refs:
+      - module: ai-backend-service
+        used_fields:
+          - send
+      - module: supabase-client
+        used_fields:
+          - from
+          - update
+      - module: farm-remote-data-source
+        used_fields:
+          - getFarmCrop
+          - getFarmPlot
+  - name: guide-crops
+    trigger: page
+    trigger_detail: "Guide section presents crop cards and crop detail content for informational browsing."
+    source_anchors:
+      - path: lib/features/guide/presentation/screens/crops_screen.dart
+        line: 1
+      - path: lib/features/guide/presentation/screens/crop_detail_screen.dart
+        line: 1
+    exported_signature:
+      - method: "CropsScreen.build"
+        source_loc: "lib/features/guide/presentation/screens/crops_screen.dart:1"
+        stability: may_change
+      - method: "CropDetailScreen.build"
+        source_loc: "lib/features/guide/presentation/screens/crop_detail_screen.dart:1"
+        stability: may_change
+    dynamic_entrypoints:
+    depends_on:
+      - unit: home-dashboard
+        via: "card-based navigation from dashboard quick actions"
+    shared_refs:
+      - module: app-router
+        used_fields:
+          - AppRoutes.guide
+          - guideDetailPath
+      - module: supabase-client
+        used_fields:
+          - from
+  - name: profile-screen
+    trigger: page
+    trigger_detail: "User profile screen lets the user inspect account information and update their profile."
+    source_anchors:
+      - path: lib/features/profile/presentation/screens/profile_screen.dart
+        line: 1
+      - path: lib/features/profile/presentation/cubit/edit_profile_cubit.dart
+        line: 1
+    exported_signature:
+      - method: "EditProfileCubit.updateProfile"
+        source_loc: "lib/features/profile/presentation/cubit/edit_profile_cubit.dart:1"
+        stability: must_preserve
+      - method: "ProfileScreen.build"
+        source_loc: "lib/features/profile/presentation/screens/profile_screen.dart:1"
+        stability: may_change
+    dynamic_entrypoints:
+    depends_on:
+      - unit: auth-login
+        via: "user session and identity"
+      - unit: auth-splash
+        via: "authenticated user present at route load"
+    shared_refs:
+      - module: supabase-client
+        used_fields:
+          - from
+          - update
+      - module: profile-remote-data-source
+        used_fields:
+          - updateProfile
