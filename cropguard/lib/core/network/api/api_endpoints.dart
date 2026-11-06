@@ -36,4 +36,14 @@ class ApiEndpoints {
   /// **GET /diagnoses/{diagnostico_id}** (Requiere token)
   /// Obtiene un diagnóstico propio por su UUID.
   static String diagnosisById(String diagnosticoId) => '/diagnoses/$diagnosticoId';
+
+  static String careActivities(String plotId) => '/plots/$plotId/care-activities';
+  static String careActivity(String activityId) => '/care-activities/$activityId';
+  static String careEvidence(String activityId) =>
+      '/care-activities/$activityId/evidence';
+  static String plotStats(String plotId) => '/plots/$plotId/stats';
+  static String plotTimeline(String plotId) => '/plots/$plotId/timeline';
+  static String plotReportData(String plotId) => '/plots/$plotId/report-data';
+  static String plotReports(String plotId) => '/plots/$plotId/reports';
+  static String report(String reportId) => '/reports/$reportId';
 }

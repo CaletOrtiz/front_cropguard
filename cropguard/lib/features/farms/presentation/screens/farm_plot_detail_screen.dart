@@ -1,13 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:kroppi/core/constants/app_colors.dart';
 import 'package:kroppi/features/farms/data/datasources/farm_remote_data_source.dart';
 import 'package:kroppi/features/farms/domain/entities/farm_details.dart';
 import 'package:kroppi/features/history/presentation/utils/date_formatter.dart';
+import 'package:kroppi/navigation/app_routes.dart';
 
 class FarmPlotDetailScreen extends StatefulWidget {
-  const FarmPlotDetailScreen({super.key, required this.plotId});
+  const FarmPlotDetailScreen({
+    super.key,
+    required this.farmId,
+    required this.cropId,
+    required this.plotId,
+  });
 
+  final String farmId;
+  final String cropId;
   final String plotId;
 
   @override
@@ -31,9 +40,9 @@ class _FarmPlotDetailScreenState extends State<FarmPlotDetailScreen> {
       _error = null;
     });
     try {
-      final plot = await context
-          .read<FarmRemoteDataSource>()
-          .getFarmPlot(widget.plotId);
+      final plot = await context.read<FarmRemoteDataSource>().getFarmPlot(
+        widget.plotId,
+      );
       if (!mounted) return;
       setState(() {
         _plot = plot;
@@ -48,11 +57,29 @@ class _FarmPlotDetailScreenState extends State<FarmPlotDetailScreen> {
     }
   }
 
+  Future<void> _edit() async {
+    final changed = await context.push<bool>(
+      AppRoutes.farmPlotEditPath(widget.farmId, widget.cropId, widget.plotId),
+      extra: _plot,
+    );
+    if (changed == true && mounted) await _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final plot = _plot;
     return Scaffold(
-      appBar: AppBar(title: Text(plot?.name ?? 'Detalle del lote')),
+      appBar: AppBar(
+        title: Text(plot?.name ?? 'Detalle del lote'),
+        actions: [
+          if (plot != null)
+            IconButton(
+              tooltip: 'Editar lote',
+              onPressed: _edit,
+              icon: const Icon(Icons.edit_outlined),
+            ),
+        ],
+      ),
       body: _loading && plot == null
           ? const Center(child: CircularProgressIndicator())
           : plot == null
@@ -139,6 +166,44 @@ class _FarmPlotDetailScreenState extends State<FarmPlotDetailScreen> {
                       label: 'Último muestreo',
                       value: DateFormatter.short(plot.lastSampledAt!.toLocal()),
                     ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Módulos del lote',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _ModuleButton(
+                        label: 'Cuidados',
+                        icon: Icons.medication_outlined,
+                        onTap: () =>
+                            context.push(AppRoutes.careListPath(widget.plotId)),
+                      ),
+                      _ModuleButton(
+                        label: 'Estadísticas',
+                        icon: Icons.insights_outlined,
+                        onTap: () => context.push(
+                          AppRoutes.plotStatsPath(widget.plotId),
+                        ),
+                      ),
+                      _ModuleButton(
+                        label: 'Historial',
+                        icon: Icons.history,
+                        onTap: () => context.push(
+                          AppRoutes.plotTimelinePath(widget.plotId),
+                        ),
+                      ),
+                      _ModuleButton(
+                        label: 'Informes',
+                        icon: Icons.picture_as_pdf_outlined,
+                        onTap: () =>
+                            context.push(AppRoutes.reportsPath(widget.plotId)),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -194,6 +259,25 @@ class _PlotFact extends StatelessWidget {
         ),
       ],
     ),
+  );
+}
+
+class _ModuleButton extends StatelessWidget {
+  const _ModuleButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton.icon(
+    onPressed: onTap,
+    icon: Icon(icon, size: 18),
+    label: Text(label),
   );
 }
 

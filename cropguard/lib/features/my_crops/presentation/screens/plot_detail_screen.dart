@@ -76,6 +76,33 @@ class PlotDetailScreen extends StatelessWidget {
                             label: const Text('Nuevo muestreo'),
                           ),
                         ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _ModuleLink(
+                              icon: Icons.medication_outlined,
+                              label: 'Cuidados',
+                              onTap: () => context.push(AppRoutes.careListPath(plotId)),
+                            ),
+                            _ModuleLink(
+                              icon: Icons.insights_outlined,
+                              label: 'Estadísticas',
+                              onTap: () => context.push(AppRoutes.plotStatsPath(plotId)),
+                            ),
+                            _ModuleLink(
+                              icon: Icons.history,
+                              label: 'Historial',
+                              onTap: () => context.push(AppRoutes.plotTimelinePath(plotId)),
+                            ),
+                            _ModuleLink(
+                              icon: Icons.picture_as_pdf_outlined,
+                              label: 'Informes',
+                              onTap: () => context.push(AppRoutes.reportsPath(plotId)),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 28),
                         const Text(
                           'Evolución de la incidencia',
@@ -116,6 +143,25 @@ class PlotDetailScreen extends StatelessWidget {
       },
     );
   }
+}
+
+class _ModuleLink extends StatelessWidget {
+  const _ModuleLink({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton.icon(
+    onPressed: onTap,
+    icon: Icon(icon, size: 18),
+    label: Text(label),
+  );
 }
 
 class _Header extends StatelessWidget {

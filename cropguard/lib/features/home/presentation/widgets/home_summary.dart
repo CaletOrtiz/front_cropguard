@@ -4,9 +4,20 @@ import 'package:kroppi/core/constants/app_strings.dart';
 import 'package:kroppi/features/home/domain/entities/home_dashboard.dart';
 
 class HomeSummary extends StatelessWidget {
-  const HomeSummary({super.key, required this.dashboard});
+  const HomeSummary({
+    super.key,
+    required this.dashboard,
+    required this.onOpenFarms,
+    required this.onOpenPlots,
+    required this.onOpenAlerts,
+    required this.onOpenDanger,
+  });
 
   final HomeDashboard dashboard;
+  final VoidCallback onOpenFarms;
+  final VoidCallback onOpenPlots;
+  final VoidCallback onOpenAlerts;
+  final VoidCallback onOpenDanger;
 
   @override
   Widget build(BuildContext context) {
@@ -17,6 +28,7 @@ class HomeSummary extends StatelessWidget {
         icon: Icons.agriculture_rounded,
         color: AppColors.primary,
         background: AppColors.primaryLight,
+        onTap: onOpenFarms,
       ),
       _HomeMetric(
         label: AppStrings.plots,
@@ -24,6 +36,7 @@ class HomeSummary extends StatelessWidget {
         icon: Icons.grid_view_rounded,
         color: AppColors.primaryDark,
         background: const Color(0xFFEAF2E8),
+        onTap: onOpenPlots,
       ),
       _HomeMetric(
         label: AppStrings.alertPlots,
@@ -31,6 +44,7 @@ class HomeSummary extends StatelessWidget {
         icon: Icons.warning_amber_rounded,
         color: AppColors.warning,
         background: const Color(0xFFFFF6DC),
+        onTap: onOpenAlerts,
       ),
       _HomeMetric(
         label: AppStrings.dangerPlots,
@@ -38,6 +52,7 @@ class HomeSummary extends StatelessWidget {
         icon: Icons.error_outline_rounded,
         color: AppColors.error,
         background: const Color(0xFFFEECEC),
+        onTap: onOpenDanger,
       ),
     ];
 
@@ -81,6 +96,7 @@ class _HomeMetric {
     required this.icon,
     required this.color,
     required this.background,
+    required this.onTap,
   });
 
   final String label;
@@ -88,6 +104,7 @@ class _HomeMetric {
   final IconData icon;
   final Color color;
   final Color background;
+  final VoidCallback onTap;
 }
 
 class _MetricCard extends StatelessWidget {
@@ -97,43 +114,48 @@ class _MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: metric.background,
+    return Material(
+      color: metric.background,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: metric.onTap,
         borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-          Icon(metric.icon, color: metric.color, size: 22),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${metric.value}',
-                  style: TextStyle(
-                    fontSize: 20,
-                    height: 1.1,
-                    fontWeight: FontWeight.w800,
-                    color: metric.color,
-                  ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Icon(metric.icon, color: metric.color, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${metric.value}',
+                      style: TextStyle(
+                        fontSize: 20,
+                        height: 1.1,
+                        fontWeight: FontWeight.w800,
+                        color: metric.color,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      metric.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  metric.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
+              ),
+              const Icon(Icons.chevron_right_rounded, size: 18),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

@@ -19,14 +19,15 @@ class SamplingArgs {
   /// Plantas registradas en el lote (puede ser null si no se indicó).
   final int? plantCount;
 
-  /// Máximo de plantas a muestrear por defecto.
+  /// Sugerencia para la cantidad inicial del muestreo.
   static const int maxTarget = 20;
 
-  /// Meta de plantas: nunca más que las que tiene el lote (mínimo 1, máximo 20).
+  /// Sugerencia inicial, limitada a la cantidad registrada cuando existe.
   int get target {
     final n = plantCount;
     if (n == null) return maxTarget;
-    return n < 1 ? 1 : (n > maxTarget ? maxTarget : n);
+    if (n < 1) return maxTarget;
+    return n > maxTarget ? maxTarget : n;
   }
 }
 
@@ -107,8 +108,8 @@ class SamplingCubit extends Cubit<SamplingState> {
   final String cropSlug;
   final String userId;
 
-  /// Meta de plantas a escanear (min(plantas del lote, 20)).
-  final int target;
+  /// Cantidad elegida por el usuario para esta sesión.
+  int target;
 
   /// Tope duro: plantas que tiene el lote. Null = sin tope.
   final int? maxPlants;
@@ -126,7 +127,14 @@ class SamplingCubit extends Cubit<SamplingState> {
   bool get canScan {
     if (state.isBusy) return false;
     final m = maxPlants;
-    return m == null || state.evaluated < m;
+    return state.evaluated < target && (m == null || state.evaluated < m);
+  }
+
+  bool configureTarget(int plants) {
+    if (plants < 1 || (maxPlants != null && plants > maxPlants!)) return false;
+    target = plants;
+    emit(state.copyWith(status: SamplingStatus.idle));
+    return true;
   }
 
   Future<void> scan(XFile image) async {

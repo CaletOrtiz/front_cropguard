@@ -2,10 +2,7 @@ import 'package:equatable/equatable.dart';
 import 'package:kroppi/features/farms/domain/entities/farm.dart';
 
 class HomeDashboard extends Equatable {
-  const HomeDashboard({
-    required this.farms,
-    required this.pendingSamplings,
-  });
+  const HomeDashboard({required this.farms, required this.pendingSamplings});
 
   final List<Farm> farms;
   final List<HomePendingSampling> pendingSamplings;
@@ -14,8 +11,7 @@ class HomeDashboard extends Equatable {
 
   int get totalPlots => farms.fold(0, (total, farm) => total + farm.plotCount);
 
-  int get alertPlots =>
-      farms.fold(0, (total, farm) => total + farm.alertPlots);
+  int get alertPlots => farms.fold(0, (total, farm) => total + farm.alertPlots);
 
   int get dangerPlots =>
       farms.fold(0, (total, farm) => total + farm.dangerPlots);
@@ -31,12 +27,16 @@ class HomePendingSampling extends Equatable {
     required this.plotId,
     required this.plotName,
     required this.farmName,
+    this.cropSlug = 'cafe',
+    this.plantCount,
     this.lastSampledAt,
   });
 
   final String plotId;
   final String plotName;
   final String farmName;
+  final String cropSlug;
+  final int? plantCount;
   final DateTime? lastSampledAt;
 
   bool get hasNeverBeenSampled => lastSampledAt == null;
@@ -46,5 +46,12 @@ class HomePendingSampling extends Equatable {
       : DateTime.now().difference(lastSampledAt!).inDays;
 
   @override
-  List<Object?> get props => [plotId, plotName, farmName, lastSampledAt];
+  List<Object?> get props => [
+    plotId,
+    plotName,
+    farmName,
+    cropSlug,
+    plantCount,
+    lastSampledAt,
+  ];
 }

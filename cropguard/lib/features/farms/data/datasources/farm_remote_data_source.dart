@@ -38,6 +38,13 @@ class FarmRemoteDataSource {
     String? address,
   }) async {
     final userId = _requireUserId();
+    final details = await getFarmDetails(farmId);
+    if (details.totalPlotAreaHa > areaHa + 0.000001) {
+      throw StateError(
+        'El área de la finca no puede ser menor que las '
+        '${details.totalPlotAreaHa.toStringAsFixed(2)} ha ocupadas por sus lotes.',
+      );
+    }
     await _client
         .from('farms')
         .update({
@@ -229,7 +236,8 @@ class FarmRemoteDataSource {
     int? plantCount,
     String? variety,
   }) async {
-    _requireUserId();
+    final crop = await getFarmCrop(cropId);
+    await _validatePlotArea(crop.farmId, areaHa);
     await _client.from('plots').insert({
       'crop_id': cropId,
       'name': name.trim(),
@@ -237,6 +245,52 @@ class FarmRemoteDataSource {
       'plant_count': ?plantCount,
       'variety': ?_optionalText(variety),
     });
+  }
+
+  Future<void> updateFarmPlot({
+    required String plotId,
+    required String cropId,
+    required String name,
+    required double areaHa,
+    int? plantCount,
+    String? variety,
+  }) async {
+    _requireUserId();
+    final crop = await getFarmCrop(cropId);
+    await _validatePlotArea(crop.farmId, areaHa, excludingPlotId: plotId);
+    final updated = await _client
+        .from('plots')
+        .update({
+          'name': name.trim(),
+          'area_ha': areaHa,
+          'plant_count': plantCount,
+          'variety': _optionalText(variety),
+        })
+        .eq('id', plotId)
+        .eq('crop_id', cropId)
+        .select('id');
+    if (updated.isEmpty) throw StateError('No se encontró el lote.');
+  }
+
+  Future<void> _validatePlotArea(
+    String farmId,
+    double areaHa, {
+    String? excludingPlotId,
+  }) async {
+    final details = await getFarmDetails(farmId);
+    final farmArea = details.farm.areaHa;
+    if (farmArea == null) return;
+    final usedArea = details.crops
+        .expand((crop) => crop.plots)
+        .where((plot) => plot.id != excludingPlotId)
+        .fold<double>(0, (total, plot) => total + plot.areaHa);
+    final available = farmArea - usedArea;
+    if (areaHa > available + 0.000001) {
+      throw StateError(
+        'El área del lote supera el área disponible de la finca '
+        '(${available < 0 ? 0 : available} ha disponibles).',
+      );
+    }
   }
 
   Future<HomeDashboard> getDashboard() async {
@@ -266,25 +320,41 @@ class FarmRemoteDataSource {
     final cropRows = _asRows(
       await _client
           .from('crops')
-          .select('id, farm_id')
+          .select('id, farm_id, crop_type_id')
           .inFilter('farm_id', farmIds)
           .eq('is_active', true),
     );
     final cropToFarm = <String, String>{};
     final cropsByFarm = <String, int>{};
+    final cropTypeByCrop = <String, String>{};
     for (final crop in cropRows) {
       final cropId = crop['id'] as String;
       final farmId = crop['farm_id'] as String;
       cropToFarm[cropId] = farmId;
+      cropTypeByCrop[cropId] = crop['crop_type_id'] as String;
       cropsByFarm.update(farmId, (count) => count + 1, ifAbsent: () => 1);
     }
+    final cropTypes = cropTypeByCrop.isEmpty
+        ? <Map<String, dynamic>>[]
+        : _asRows(
+            await _client
+                .from('crop_types')
+                .select('id, slug')
+                .inFilter('id', cropTypeByCrop.values.toSet().toList()),
+          );
+    final slugByType = {
+      for (final type in cropTypes)
+        type['id'] as String: type['slug'] as String? ?? 'cafe',
+    };
 
     final plotRows = cropToFarm.isEmpty
         ? <Map<String, dynamic>>[]
         : _asRows(
             await _client
                 .from('plots')
-                .select('id, crop_id, name, status, last_sampled_at')
+                .select(
+                  'id, crop_id, name, plant_count, status, last_sampled_at',
+                )
                 .inFilter('crop_id', cropToFarm.keys.toList()),
           );
     final plotsByFarm = <String, int>{};
@@ -318,6 +388,8 @@ class FarmRemoteDataSource {
             plotId: plot['id'] as String,
             plotName: plot['name'] as String,
             farmName: farmsById[farmId]!['name'] as String,
+            cropSlug: slugByType[cropTypeByCrop[plot['crop_id']]] ?? 'cafe',
+            plantCount: (plot['plant_count'] as num?)?.toInt(),
             lastSampledAt: sampledAt,
           ),
         );

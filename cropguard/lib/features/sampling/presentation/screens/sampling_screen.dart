@@ -26,10 +26,32 @@ String _outcomeText(ScanItem s) =>
 
 String _pct(double confidence) => '${(confidence * 100).toStringAsFixed(0)} %';
 
-class SamplingScreen extends StatelessWidget {
+class SamplingScreen extends StatefulWidget {
   const SamplingScreen({super.key, required this.plotId});
 
   final String plotId;
+
+  @override
+  State<SamplingScreen> createState() => _SamplingScreenState();
+}
+
+class _SamplingScreenState extends State<SamplingScreen> {
+  final _setupKey = GlobalKey<FormState>();
+  final _plantCountController = TextEditingController();
+  bool _started = false;
+
+  @override
+  void dispose() {
+    _plantCountController.dispose();
+    super.dispose();
+  }
+
+  void _start(SamplingCubit cubit) {
+    if (!_setupKey.currentState!.validate()) return;
+    final count = int.parse(_plantCountController.text.trim());
+    if (!cubit.configureTarget(count)) return;
+    setState(() => _started = true);
+  }
 
   Future<void> _capture(BuildContext context, {required bool camera}) async {
     final picker = ImagePickerService();
@@ -43,6 +65,67 @@ class SamplingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!_started) {
+      return BlocBuilder<SamplingCubit, SamplingState>(
+        builder: (context, _) {
+          final cubit = context.read<SamplingCubit>();
+          final maxPlants = cubit.maxPlants;
+          return Scaffold(
+            appBar: AppBar(title: const Text('Preparar muestreo')),
+            body: SafeArea(
+              child: ListView(
+                padding: const EdgeInsets.all(24),
+                children: [
+                  Text(
+                    '¿Cuántas plantas vas a diagnosticar?',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    maxPlants == null
+                        ? 'Elige el tamaño de la muestra para este lote.'
+                        : 'Este lote tiene $maxPlants plantas registradas. '
+                              'La muestra no puede ser mayor que esa cantidad.',
+                    style: const TextStyle(color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 20),
+                  Form(
+                    key: _setupKey,
+                    child: TextFormField(
+                      controller: _plantCountController,
+                      autofocus: true,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Plantas a diagnosticar',
+                        hintText: 'Escribe una cantidad',
+                        prefixIcon: Icon(Icons.nature_outlined),
+                      ),
+                      validator: (value) {
+                        final count = int.tryParse((value ?? '').trim());
+                        if (count == null || count < 1) {
+                          return 'Ingresa una cantidad mayor que cero';
+                        }
+                        if (maxPlants != null && count > maxPlants) {
+                          return 'No puede superar las $maxPlants plantas del lote';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: () => _start(cubit),
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: const Text('Comenzar muestreo'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    }
+
     return BlocConsumer<SamplingCubit, SamplingState>(
       listenWhen: (_, s) => s.status == SamplingStatus.failure,
       listener: (context, state) {
@@ -61,7 +144,8 @@ class SamplingScreen extends StatelessWidget {
         final evaluated = state.evaluated; // solo fotos concluyentes
         final target = cubit.target;
         final maxPlants = cubit.maxPlants;
-        final hasRoom = maxPlants == null || evaluated < maxPlants;
+        final hasRoom =
+            evaluated < target && (maxPlants == null || evaluated < maxPlants);
         final reachedTarget = evaluated >= target;
         final scanning = state.status == SamplingStatus.scanning;
         final closing = state.status == SamplingStatus.closing;
@@ -188,10 +272,10 @@ class SamplingScreen extends StatelessWidget {
                       child: const Text('Elegir de la galería'),
                     ),
                   ] else
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Text(
-                        'Ya escaneaste todas las plantas del lote. '
+                        'Ya completaste las $target plantas elegidas. '
                         'Toca «Terminar muestreo».',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: AppColors.textSecondary),

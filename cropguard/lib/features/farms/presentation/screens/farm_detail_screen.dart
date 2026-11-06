@@ -6,6 +6,7 @@ import 'package:kroppi/features/farms/data/datasources/farm_remote_data_source.d
 import 'package:kroppi/features/farms/domain/entities/farm.dart';
 import 'package:kroppi/features/farms/domain/entities/farm_details.dart';
 import 'package:kroppi/features/history/presentation/utils/date_formatter.dart';
+import 'package:kroppi/features/sampling/presentation/cubit/sampling_cubit.dart';
 import 'package:kroppi/navigation/app_routes.dart';
 
 class FarmDetailScreen extends StatefulWidget {
@@ -51,8 +52,8 @@ class _FarmDetailScreenState extends State<FarmDetailScreen> {
     }
   }
 
-  Future<void> _openForm(String path) async {
-    await context.push(path);
+  Future<void> _openForm(String path, {Object? extra}) async {
+    await context.push(path, extra: extra);
     if (mounted) await _load();
   }
 
@@ -61,7 +62,9 @@ class _FarmDetailScreenState extends State<FarmDetailScreen> {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(content: Text('Primero agrega un cultivo a la finca.')),
+          const SnackBar(
+            content: Text('Primero agrega un cultivo a la finca.'),
+          ),
         );
       return;
     }
@@ -157,6 +160,9 @@ class _FarmDetailScreenState extends State<FarmDetailScreen> {
                         onEdit: () => _openForm(
                           AppRoutes.farmCropEditPath(widget.farmId, crop.id),
                         ),
+                        onOpenCrop: () => context.push(
+                          AppRoutes.farmCropDetailPath(widget.farmId, crop.id),
+                        ),
                         onAddPlot: () => _openForm(
                           AppRoutes.farmPlotNewPath(widget.farmId, crop.id),
                         ),
@@ -165,6 +171,21 @@ class _FarmDetailScreenState extends State<FarmDetailScreen> {
                             widget.farmId,
                             crop.id,
                             plot.id,
+                          ),
+                        ),
+                        onEditPlot: (plot) => _openForm(
+                          AppRoutes.farmPlotEditPath(
+                            widget.farmId,
+                            crop.id,
+                            plot.id,
+                          ),
+                          extra: plot,
+                        ),
+                        onStartSampling: (plot) => context.push(
+                          AppRoutes.samplingPath(plot.id),
+                          extra: SamplingArgs(
+                            cropSlug: crop.typeSlug ?? 'cafe',
+                            plantCount: plot.plantCount,
                           ),
                         ),
                       ),
@@ -348,16 +369,22 @@ class _CropCard extends StatefulWidget {
     required this.crop,
     required this.initiallyExpanded,
     required this.onEdit,
+    required this.onOpenCrop,
     required this.onAddPlot,
     required this.onOpenPlot,
+    required this.onEditPlot,
+    required this.onStartSampling,
     super.key,
   });
 
   final FarmCrop crop;
   final bool initiallyExpanded;
   final VoidCallback onEdit;
+  final VoidCallback onOpenCrop;
   final VoidCallback onAddPlot;
   final ValueChanged<FarmPlot> onOpenPlot;
+  final ValueChanged<FarmPlot> onEditPlot;
+  final ValueChanged<FarmPlot> onStartSampling;
 
   @override
   State<_CropCard> createState() => _CropCardState();
@@ -389,7 +416,7 @@ class _CropCardState extends State<_CropCard> {
               children: [
                 Expanded(
                   child: InkWell(
-                    onTap: () => setState(() => _expanded = !_expanded),
+                    onTap: widget.onOpenCrop,
                     borderRadius: BorderRadius.circular(10),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -483,12 +510,37 @@ class _CropCardState extends State<_CropCard> {
                 ),
               )
             else
-              for (var index = 0; index < crop.plots.length; index++)
+              for (var index = 0; index < crop.plots.length; index++) ...[
                 _PlotRow(
                   plot: crop.plots[index],
                   onTap: () => widget.onOpenPlot(crop.plots[index]),
-                  showDivider: index < crop.plots.length - 1,
                 ),
+                Padding(
+                  padding: const EdgeInsets.only(
+                    left: 12,
+                    right: 12,
+                    bottom: 4,
+                  ),
+                  child: Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: () => widget.onEditPlot(crop.plots[index]),
+                        icon: const Icon(Icons.edit_outlined, size: 16),
+                        label: const Text('Editar lote'),
+                      ),
+                      const Spacer(),
+                      OutlinedButton.icon(
+                        onPressed: () =>
+                            widget.onStartSampling(crop.plots[index]),
+                        icon: const Icon(Icons.play_arrow_rounded, size: 17),
+                        label: const Text('Iniciar muestreo'),
+                      ),
+                    ],
+                  ),
+                ),
+                if (index < crop.plots.length - 1)
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+              ],
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
               child: Align(
@@ -508,52 +560,42 @@ class _CropCardState extends State<_CropCard> {
 }
 
 class _PlotRow extends StatelessWidget {
-  const _PlotRow({
-    required this.plot,
-    required this.onTap,
-    required this.showDivider,
-  });
+  const _PlotRow({required this.plot, required this.onTap});
 
   final FarmPlot plot;
   final VoidCallback onTap;
-  final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
     final health = _healthStyle(plot.health);
-    return Column(
-      children: [
-        ListTile(
-          onTap: onTap,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-          title: Text(
-            plot.name,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          subtitle: Text(
-            [
-              '${_formatArea(plot.areaHa)} ha',
-              if (plot.lastSampledAt != null)
-                'Último muestreo: ${DateFormatter.short(plot.lastSampledAt!.toLocal())}',
-            ].join(' · '),
-            maxLines: 2,
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.circle, size: 9, color: health.color),
-              const SizedBox(width: 6),
-              Text(health.label, style: TextStyle(color: health.color)),
-              const SizedBox(width: 4),
-              const Icon(Icons.chevron_right_rounded),
-            ],
-          ),
+    return ListTile(
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      title: Text(
+        plot.name,
+        style: const TextStyle(
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
         ),
-        if (showDivider) const Divider(height: 1, indent: 16, endIndent: 16),
-      ],
+      ),
+      subtitle: Text(
+        [
+          '${_formatArea(plot.areaHa)} ha',
+          if (plot.lastSampledAt != null)
+            'Último muestreo: ${DateFormatter.short(plot.lastSampledAt!.toLocal())}',
+        ].join(' · '),
+        maxLines: 2,
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.circle, size: 9, color: health.color),
+          const SizedBox(width: 6),
+          Text(health.label, style: TextStyle(color: health.color)),
+          const SizedBox(width: 4),
+          const Icon(Icons.chevron_right_rounded),
+        ],
+      ),
     );
   }
 }

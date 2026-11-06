@@ -11,6 +11,7 @@ import 'package:kroppi/features/home/presentation/widgets/home_summary.dart';
 import 'package:kroppi/features/home/presentation/widgets/pending_sampling_card.dart';
 import 'package:kroppi/features/home/presentation/widgets/quick_access_header.dart';
 import 'package:kroppi/features/home/presentation/widgets/quick_access_tile.dart';
+import 'package:kroppi/features/sampling/presentation/cubit/sampling_cubit.dart';
 import 'package:kroppi/navigation/app_routes.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -57,9 +58,7 @@ class HomeScreen extends StatelessWidget {
                             onRetry: context.read<HomeCubit>().load,
                           )
                         else if (dashboard != null)
-                          _DashboardContent(
-                            dashboard: dashboard,
-                          ),
+                          _DashboardContent(dashboard: dashboard),
                       ],
                     ),
                   ),
@@ -129,7 +128,13 @@ class _DashboardContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        HomeSummary(dashboard: dashboard),
+        HomeSummary(
+          dashboard: dashboard,
+          onOpenFarms: () => context.go(AppRoutes.farms),
+          onOpenPlots: () => context.push(AppRoutes.plotOverview),
+          onOpenAlerts: () => context.push(AppRoutes.plotAlerts),
+          onOpenDanger: () => context.push(AppRoutes.plotDanger),
+        ),
         const SizedBox(height: 20),
         const SizedBox(height: 28),
         const Text(
@@ -153,8 +158,13 @@ class _DashboardContent extends StatelessWidget {
           for (final sampling in dashboard.pendingSamplings) ...[
             PendingSamplingCard(
               sampling: sampling,
-              onStartSampling: () =>
-                  context.push(AppRoutes.samplingPath(sampling.plotId)),
+              onStartSampling: () => context.push(
+                AppRoutes.samplingPath(sampling.plotId),
+                extra: SamplingArgs(
+                  cropSlug: sampling.cropSlug,
+                  plantCount: sampling.plantCount,
+                ),
+              ),
             ),
             if (sampling != dashboard.pendingSamplings.last)
               const SizedBox(height: 12),

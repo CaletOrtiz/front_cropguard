@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:kroppi/core/widgets/app_text_field.dart';
 import 'package:kroppi/core/widgets/primary_button.dart';
 import 'package:kroppi/features/farms/data/datasources/farm_remote_data_source.dart';
+import 'package:kroppi/features/farms/domain/entities/farm_details.dart';
 import 'package:kroppi/features/my_crops/data/datasources/my_crops_remote_data_source.dart';
 
 class PlotFormScreen extends StatefulWidget {
@@ -11,10 +12,14 @@ class PlotFormScreen extends StatefulWidget {
     super.key,
     required this.cropId,
     this.useSupabase = false,
+    this.farmId,
+    this.plot,
   });
 
   final String cropId;
   final bool useSupabase;
+  final String? farmId;
+  final FarmPlot? plot;
 
   @override
   State<PlotFormScreen> createState() => _PlotFormScreenState();
@@ -27,6 +32,53 @@ class _PlotFormScreenState extends State<PlotFormScreen> {
   final _plants = TextEditingController();
   final _variety = TextEditingController();
   bool _saving = false;
+  bool _loadingArea = false;
+  double? _availableArea;
+
+  @override
+  void initState() {
+    super.initState();
+    final plot = widget.plot;
+    if (plot != null) {
+      _name.text = plot.name;
+      _area.text = plot.areaHa.toString();
+      _plants.text = plot.plantCount?.toString() ?? '';
+      _variety.text = plot.variety ?? '';
+    }
+    if (widget.useSupabase && widget.farmId != null) {
+      _loadAvailableArea();
+    }
+  }
+
+  Future<void> _loadAvailableArea() async {
+    setState(() => _loadingArea = true);
+    try {
+      final details = await context.read<FarmRemoteDataSource>().getFarmDetails(
+        widget.farmId!,
+      );
+      if (!mounted) return;
+      final used = details.crops
+          .expand((crop) => crop.plots)
+          .where((plot) => plot.id != widget.plot?.id)
+          .fold<double>(0, (total, plot) => total + plot.areaHa);
+      setState(() {
+        _availableArea = details.farm.areaHa == null
+            ? null
+            : (details.farm.areaHa! - used)
+                  .clamp(0, double.infinity)
+                  .toDouble();
+        _loadingArea = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _loadingArea = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo consultar el área disponible: $error'),
+        ),
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -46,13 +98,26 @@ class _PlotFormScreenState extends State<PlotFormScreen> {
       final plantCount = int.tryParse(_plants.text.trim());
       final variety = _variety.text.trim();
       if (widget.useSupabase) {
-        await context.read<FarmRemoteDataSource>().createFarmPlot(
-          cropId: widget.cropId,
-          name: name,
-          areaHa: areaHa,
-          plantCount: plantCount,
-          variety: variety,
-        );
+        final source = context.read<FarmRemoteDataSource>();
+        final plot = widget.plot;
+        if (plot == null) {
+          await source.createFarmPlot(
+            cropId: widget.cropId,
+            name: name,
+            areaHa: areaHa,
+            plantCount: plantCount,
+            variety: variety,
+          );
+        } else {
+          await source.updateFarmPlot(
+            plotId: plot.id,
+            cropId: widget.cropId,
+            name: name,
+            areaHa: areaHa,
+            plantCount: plantCount,
+            variety: variety,
+          );
+        }
       } else {
         await context.read<MyCropsRemoteDataSource>().createPlot(
           widget.cropId,
@@ -75,7 +140,9 @@ class _PlotFormScreenState extends State<PlotFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Nuevo lote')),
+      appBar: AppBar(
+        title: Text(widget.plot == null ? 'Nuevo lote' : 'Editar lote'),
+      ),
       body: SafeArea(
         child: Form(
           key: _formKey,
@@ -107,9 +174,24 @@ class _PlotFormScreenState extends State<PlotFormScreen> {
                   if (n == null || !n.isFinite || n <= 0) {
                     return 'Ingresa un área válida';
                   }
+                  if (_availableArea != null &&
+                      n > _availableArea! + 0.000001) {
+                    return 'Máximo disponible: ${_availableArea!.toStringAsFixed(2)} ha';
+                  }
                   return null;
                 },
               ),
+              if (_loadingArea) ...[
+                const SizedBox(height: 8),
+                const LinearProgressIndicator(),
+              ] else if (_availableArea != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Área disponible en la finca: '
+                  '${_availableArea!.toStringAsFixed(2)} ha',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
               const SizedBox(height: 16),
               AppTextField(
                 label: 'Número de plantas (opcional)',
@@ -133,7 +215,7 @@ class _PlotFormScreenState extends State<PlotFormScreen> {
               ),
               const SizedBox(height: 28),
               PrimaryButton(
-                label: 'Guardar lote',
+                label: widget.plot == null ? 'Guardar lote' : 'Guardar cambios',
                 isLoading: _saving,
                 onPressed: _save,
               ),

@@ -15,12 +15,15 @@ import 'package:kroppi/features/auth/presentation/screens/register_screen.dart';
 
 // Home, historial, perfil
 import 'package:kroppi/features/farms/data/datasources/farm_remote_data_source.dart';
+import 'package:kroppi/features/farms/domain/entities/farm_details.dart';
 import 'package:kroppi/features/farms/presentation/cubit/farms_cubit.dart';
 import 'package:kroppi/features/farms/presentation/screens/farm_form_screen.dart';
 import 'package:kroppi/features/farms/presentation/screens/farm_detail_screen.dart';
 import 'package:kroppi/features/farms/presentation/screens/farm_crop_form_screen.dart';
+import 'package:kroppi/features/farms/presentation/screens/farm_crop_detail_screen.dart';
 import 'package:kroppi/features/farms/presentation/screens/farm_plot_detail_screen.dart';
 import 'package:kroppi/features/farms/presentation/screens/farms_screen.dart';
+import 'package:kroppi/features/farms/presentation/screens/plots_overview_screen.dart';
 import 'package:kroppi/features/home/presentation/cubit/home_cubit.dart';
 import 'package:kroppi/features/home/presentation/screens/home_screen.dart';
 import 'package:kroppi/features/history/presentation/screens/history_screen.dart';
@@ -58,6 +61,13 @@ import 'package:kroppi/features/my_crops/presentation/screens/plot_form_screen.d
 import 'package:kroppi/features/my_crops/presentation/screens/plot_detail_screen.dart';
 import 'package:kroppi/features/sampling/presentation/cubit/sampling_cubit.dart';
 import 'package:kroppi/features/sampling/presentation/screens/sampling_screen.dart';
+import 'package:kroppi/features/care_log/presentation/screens/care_detail_screen.dart';
+import 'package:kroppi/features/care_log/presentation/screens/care_form_screen.dart';
+import 'package:kroppi/features/care_log/presentation/screens/care_list_screen.dart';
+import 'package:kroppi/features/plot_stats/presentation/screens/plot_stats_screen.dart';
+import 'package:kroppi/features/plot_timeline/presentation/screens/plot_timeline_screen.dart';
+import 'package:kroppi/features/reports/presentation/screens/report_setup_screen.dart';
+import 'package:kroppi/features/reports/presentation/screens/reports_list_screen.dart';
 
 class AppRouter {
   AppRouter._();
@@ -167,6 +177,13 @@ class AppRouter {
             FarmCropFormScreen(farmId: state.pathParameters['farmId']!),
       ),
       GoRoute(
+        path: AppRoutes.farmCropDetail,
+        builder: (context, state) => FarmCropDetailScreen(
+          farmId: state.pathParameters['farmId']!,
+          cropId: state.pathParameters['cropId']!,
+        ),
+      ),
+      GoRoute(
         path: AppRoutes.farmCropEdit,
         builder: (context, state) => FarmCropFormScreen(
           farmId: state.pathParameters['farmId']!,
@@ -178,12 +195,25 @@ class AppRouter {
         builder: (context, state) => PlotFormScreen(
           cropId: state.pathParameters['cropId']!,
           useSupabase: true,
+          farmId: state.pathParameters['farmId']!,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.farmPlotEdit,
+        builder: (context, state) => PlotFormScreen(
+          cropId: state.pathParameters['cropId']!,
+          useSupabase: true,
+          farmId: state.pathParameters['farmId']!,
+          plot: state.extra as FarmPlot?,
         ),
       ),
       GoRoute(
         path: AppRoutes.farmPlotDetail,
-        builder: (context, state) =>
-            FarmPlotDetailScreen(plotId: state.pathParameters['plotId']!),
+        builder: (context, state) => FarmPlotDetailScreen(
+          farmId: state.pathParameters['farmId']!,
+          cropId: state.pathParameters['cropId']!,
+          plotId: state.pathParameters['plotId']!,
+        ),
       ),
       GoRoute(
         path: AppRoutes.farmDetail,
@@ -221,6 +251,66 @@ class AppRouter {
             child: PlotDetailScreen(plotId: plotId),
           );
         },
+      ),
+      GoRoute(
+        path: AppRoutes.plotOverview,
+        builder: (context, state) => const PlotsOverviewScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.plotAlerts,
+        builder: (context, state) =>
+            const PlotsOverviewScreen(filter: PlotsOverviewFilter.alert),
+      ),
+      GoRoute(
+        path: AppRoutes.plotDanger,
+        builder: (context, state) =>
+            const PlotsOverviewScreen(filter: PlotsOverviewFilter.danger),
+      ),
+      GoRoute(
+        path: AppRoutes.careList,
+        builder: (context, state) =>
+            CareListScreen(plotId: state.pathParameters['plotId']!),
+      ),
+      GoRoute(
+        path: AppRoutes.careNew,
+        builder: (context, state) =>
+            CareFormScreen(plotId: state.pathParameters['plotId']!),
+      ),
+      GoRoute(
+        path: AppRoutes.careEdit,
+        builder: (context, state) => CareFormScreen(
+          plotId: state.pathParameters['plotId']!,
+          initial: state.extra as Map<String, dynamic>?,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.careDetail,
+        builder: (context, state) => CareDetailScreen(
+          plotId: state.pathParameters['plotId']!,
+          activityId: state.pathParameters['activityId']!,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.plotStats,
+        builder: (context, state) =>
+            PlotStatsScreen(plotId: state.pathParameters['plotId']!),
+      ),
+      GoRoute(
+        path: AppRoutes.plotTimeline,
+        builder: (context, state) =>
+            PlotTimelineScreen(plotId: state.pathParameters['plotId']!),
+      ),
+      GoRoute(
+        path: AppRoutes.reports,
+        builder: (context, state) => ReportsListScreen(
+          plotId: state.pathParameters['plotId']!,
+          initialReportId: state.extra as String?,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.reportNew,
+        builder: (context, state) =>
+            ReportSetupScreen(plotId: state.pathParameters['plotId']!),
       ),
       GoRoute(
         path: AppRoutes.sampling,

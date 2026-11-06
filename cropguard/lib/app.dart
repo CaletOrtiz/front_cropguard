@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:kroppi/core/constants/app_strings.dart';
 import 'package:kroppi/core/network/api/fastapi_client.dart';
@@ -59,6 +60,13 @@ class KroppiApp extends StatelessWidget {
         child: MaterialApp.router(
           title: AppStrings.appName,
           debugShowCheckedModeBanner: false,
+          locale: const Locale('es'),
+          supportedLocales: const [Locale('es'), Locale('en')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
           theme: AppTheme.light,
           routerConfig: AppRouter.router,
           builder: (context, child) {
@@ -67,26 +75,34 @@ class KroppiApp extends StatelessWidget {
               return child ?? const SizedBox();
             }
 
-            return ColoredBox(
-              color: const Color(0xFFE5E5E5),
-              child: Center(
-                child: Container(
-                  width: 390,
-                  height: 844,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(40),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.25),
-                        blurRadius: 40,
-                        offset: const Offset(0, 16),
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final frameSize = constraints.constrain(const Size(390, 844));
+                return ColoredBox(
+                  color: const Color(0xFFE5E5E5),
+                  child: Center(
+                    child: Container(
+                      width: frameSize.width,
+                      height: frameSize.height,
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(40),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.25),
+                            blurRadius: 40,
+                            offset: const Offset(0, 16),
+                          ),
+                        ],
                       ),
-                    ],
+                      child: MediaQuery(
+                        data: MediaQuery.of(context).copyWith(size: frameSize),
+                        child: child,
+                      ),
+                    ),
                   ),
-                  child: child,
-                ),
-              ),
+                );
+              },
             );
           },
         ),
