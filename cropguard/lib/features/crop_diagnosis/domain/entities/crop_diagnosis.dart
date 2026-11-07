@@ -21,6 +21,19 @@ class CropDiagnosis extends Equatable {
     required this.createdAt,
   });
 
+  /// Solo para la app; la decisión real la toma el backend.
+  static const conclusiveThreshold = 0.7;
+
+  /// Nombres que el backend usa para "sin enfermedad".
+  static const healthyNames = {'Hoja sana', 'Planta sana'};
+
+  bool get isConclusive => confidence >= conclusiveThreshold;
+
+  bool get isHealthy => healthyNames.contains(diseaseName);
+
+  /// Cuenta como planta afectada en un muestreo.
+  bool get isDiseased => isConclusive && !isHealthy;
+
   @override
   List<Object?> get props => [
     id,

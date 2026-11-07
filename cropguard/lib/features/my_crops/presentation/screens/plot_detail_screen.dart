@@ -87,6 +87,16 @@ class PlotDetailScreen extends StatelessWidget {
                               onTap: () => context.push(AppRoutes.careListPath(plotId)),
                             ),
                             _ModuleLink(
+                              icon: Icons.agriculture,
+                              label: 'Cosechas',
+                              onTap: () => context.push(AppRoutes.harvestsPath(plotId)),
+                            ),
+                            _ModuleLink(
+                              icon: Icons.trending_down,
+                              label: 'Pérdida estimada',
+                              onTap: () => context.push(AppRoutes.lossPath(plotId)),
+                            ),
+                            _ModuleLink(
                               icon: Icons.insights_outlined,
                               label: 'Estadísticas',
                               onTap: () => context.push(AppRoutes.plotStatsPath(plotId)),

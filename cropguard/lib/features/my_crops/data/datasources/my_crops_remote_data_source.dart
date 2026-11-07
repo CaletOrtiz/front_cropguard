@@ -80,16 +80,50 @@ class MyCropsRemoteDataSource {
 
   // ---------------- Muestreos ----------------
 
-  Future<SampleResult> closeSample(
-    String plotId,
-    List<String> diagnosticIds,
-  ) async {
+  /// Abre un muestreo (POST /plots/{id}/samples). El backend exige que cada
+  /// foto (POST /diagnoses) apunte a un muestreo existente, así que se crea
+  /// antes de diagnosticar y se corrige al final con [finishSample].
+  Future<String> startSample(
+    String plotId, {
+    required int plantsEvaluated,
+    int plantsAffected = 0,
+  }) async {
     final r = await _api.send(
       'POST',
       '/plots/$plotId/samples',
-      data: {'diagnostic_ids': diagnosticIds},
+      data: {
+        'sampled_at': DateTime.now().toUtc().toIso8601String(),
+        'plants_evaluated': plantsEvaluated,
+        'plants_affected': plantsAffected,
+      },
+    );
+    return (r as Map<String, dynamic>)['id'] as String;
+  }
+
+  /// Guarda las cantidades finales (PATCH /samples/{id}).
+  Future<SampleResult> finishSample(
+    String sampleId, {
+    required int plantsEvaluated,
+    required int plantsAffected,
+  }) async {
+    final r = await _api.send(
+      'PATCH',
+      '/samples/$sampleId',
+      data: {
+        'plants_evaluated': plantsEvaluated,
+        'plants_affected': plantsAffected,
+      },
     );
     return SampleResult.fromJson(r as Map<String, dynamic>);
+  }
+
+  /// Borra un muestreo abandonado junto con sus diagnósticos.
+  Future<void> discardSample(String sampleId) async {
+    await _api.send('DELETE', '/samples/$sampleId');
+  }
+
+  Future<void> deleteDiagnosis(String diagnosisId) async {
+    await _api.send('DELETE', '/diagnoses/$diagnosisId');
   }
 
   Future<List<PlotSample>> getSamples(String plotId) async {

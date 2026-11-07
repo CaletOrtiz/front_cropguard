@@ -169,6 +169,7 @@ class _CareListScreenState extends State<CareListScreen> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 OutlinedButton.icon(
+                                  style: _pagerStyle,
                                   onPressed: _pageIndex == 0
                                       ? null
                                       : () => _load(page: _pageIndex - 1),
@@ -177,6 +178,7 @@ class _CareListScreenState extends State<CareListScreen> {
                                 ),
                                 Text('Página ${_pageIndex + 1}'),
                                 OutlinedButton.icon(
+                                  style: _pagerStyle,
                                   onPressed: !_hasMore
                                       ? null
                                       : () => _load(page: _pageIndex + 1),
@@ -252,6 +254,9 @@ class _CareListScreenState extends State<CareListScreen> {
     ),
   );
 }
+
+// El tema usa ancho infinito para OutlinedButton; dentro de un Row hay que acotarlo.
+final _pagerStyle = OutlinedButton.styleFrom(minimumSize: const Size(0, 40));
 
 IconData _icon(String type) => switch (type) {
   'FERTILIZATION' => Icons.grass,

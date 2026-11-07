@@ -19,6 +19,10 @@ import 'package:kroppi/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:kroppi/features/crop_diagnosis/data/repositories/crop_diagnosis_repository_impl.dart';
 import 'package:kroppi/features/crop_diagnosis/domain/usecases/analyze_crop_image_usecase.dart';
 import 'package:kroppi/features/farms/data/datasources/farm_remote_data_source.dart';
+import 'package:kroppi/features/harvests/data/repositories/harvest_repository_impl.dart';
+import 'package:kroppi/features/harvests/domain/repositories/harvest_repository.dart';
+import 'package:kroppi/features/loss_estimation/data/repositories/loss_repository_impl.dart';
+import 'package:kroppi/features/loss_estimation/domain/repositories/loss_repository.dart';
 import 'package:kroppi/features/my_crops/data/datasources/my_crops_remote_data_source.dart';
 import 'package:kroppi/navigation/app_router.dart';
 
@@ -48,6 +52,10 @@ class KroppiApp extends StatelessWidget {
           create: (_) =>
               FarmRemoteDataSource(app_supabase.SupabaseClient.client),
         ),
+        RepositoryProvider<HarvestRepository>(
+          create: (_) => HarvestRepositoryImpl(),
+        ),
+        RepositoryProvider<LossRepository>(create: (_) => LossRepositoryImpl()),
       ],
       child: BlocProvider(
         create: (context) => AuthBloc(

@@ -6,8 +6,7 @@ class AnalyzeImageSubmittedEvent extends DiagnosisEvent {
   final XFile imageFile;
   final String userId;
   final String? prompt;
-  final String cropSlug;
-  final String? plotId;
+  final String plotId;
   final double? latitude;
   final double? longitude;
 
@@ -15,8 +14,7 @@ class AnalyzeImageSubmittedEvent extends DiagnosisEvent {
     required this.imageFile,
     required this.userId,
     this.prompt,
-    this.cropSlug = 'cafe',
-    this.plotId,
+    required this.plotId,
     this.latitude,
     this.longitude,
   });

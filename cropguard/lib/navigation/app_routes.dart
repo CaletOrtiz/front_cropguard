@@ -73,6 +73,20 @@ class AppRoutes {
   static String plotStatsPath(String id) => '/plots/$id/stats';
   static const plotTimeline = '/plots/:plotId/timeline';
   static String plotTimelinePath(String id) => '/plots/$id/timeline';
+  static const harvests = '/plots/:plotId/harvests';
+  static String harvestsPath(String id) => '/plots/$id/harvests';
+  static const harvestNew = '/plots/:plotId/harvests/new';
+  static String harvestNewPath(String id) => '/plots/$id/harvests/new';
+  static const harvestDetail = '/plots/:plotId/harvests/:harvestId';
+  static String harvestDetailPath(String plotId, String id) =>
+      '/plots/$plotId/harvests/$id';
+  static const loss = '/plots/:plotId/loss';
+  static String lossPath(String id) => '/plots/$id/loss';
+  static const lossNew = '/plots/:plotId/loss/new';
+  static String lossNewPath(String id) => '/plots/$id/loss/new';
+  static const lossDetail = '/plots/:plotId/loss/:estimationId';
+  static String lossDetailPath(String plotId, String id) =>
+      '/plots/$plotId/loss/$id';
   static const reports = '/plots/:plotId/reports';
   static String reportsPath(String id) => '/plots/$id/reports';
   static const reportNew = '/plots/:plotId/reports/new';

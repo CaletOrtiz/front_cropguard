@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:kroppi/core/network/api/api_error_message.dart';
+import 'package:kroppi/core/utils/number_format.dart';
 import 'package:kroppi/features/plot_modules/data/plot_modules_remote_data_source.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -357,31 +358,68 @@ class _ReportSetupScreenState extends State<ReportSetupScreen> {
           ]),
           section('Producción y cosechas', [
             table(
-              ['Fecha', 'Kg', 'Precio/kg', 'Valor COP'],
-              harvests
-                  .map(
-                    (row) => [
-                      row['harvested_at'].toString(),
-                      row['quantity_kg'].toString(),
-                      row['price_per_kg']?.toString() ?? 'Sin precio',
-                      row['value_cop']?.toString() ?? '',
-                    ],
-                  )
-                  .toList(),
+              ['Fecha', 'Kg', 'Precio/kg', 'Valor'],
+              harvests.map((row) {
+                final currency = row['currency']?.toString() ?? 'COP';
+                return [
+                  row['harvested_at'].toString(),
+                  formatKg(row['quantity_kg'] as num?),
+                  row['price_per_kg'] == null
+                      ? 'Sin precio'
+                      : '${formatMoney(row['price_per_kg'] as num, currency)} $currency',
+                  row['value'] == null
+                      ? ''
+                      : '${formatMoney(row['value'] as num, currency)} $currency',
+                ];
+              }).toList(),
             ),
-            pw.Text(
-              'Total: ${production['harvested_kg'] ?? 0} kg · Ingresos: ${production['revenue_cop'] ?? 0} COP',
-            ),
+            pw.Text('Total cosechado: ${formatKg(production['harvested_kg'] as num?)}'),
+            // Un total por moneda: nunca se suman COP y USD.
+            for (final row in (production['by_currency'] as List? ?? const [])
+                .cast<Map<String, dynamic>>())
+              pw.Text(
+                'Ingresos ${row['currency']}: '
+                '${formatMoney(row['revenue'] as num?, row['currency'].toString())} ${row['currency']}',
+              ),
+            if (((production['harvests_without_price'] as num?) ?? 0) > 0)
+              pw.Text(
+                '${production['harvests_without_price']} cosecha(s) sin precio: '
+                'los ingresos pueden estar subestimados.',
+              ),
           ]),
           section('Pérdidas económicas', [
             if (losses == null)
               pw.Text('No hay estimación de pérdidas en el periodo')
-            else
+            else ...[
               pw.Text(
-                'Esperados: ${losses['expected_kg'] ?? 'Sin dato'} kg · Cosechados: ${losses['harvested_kg'] ?? 0} kg · '
-                'Perdidos: ${losses['lost_kg'] ?? 'Sin dato'} kg · Porcentaje: ${losses['loss_pct'] ?? 'Sin dato'} % · '
-                'Monto: ${losses['loss_amount_cop'] ?? 'Sin dato'} COP',
+                'Estimación ${losses['period_from']} a ${losses['period_to']}: '
+                'esperados ${formatKg(losses['expected_kg'] as num?)} · '
+                'cosechados ${formatKg(losses['harvested_kg'] as num?)} · '
+                'perdidos ${formatKg(losses['lost_kg'] as num?)} · '
+                '${formatPct(losses['loss_pct'] as num?)} · '
+                'monto ${formatMoney(losses['loss_amount'] as num?, losses['currency']?.toString() ?? 'COP')} '
+                '${losses['currency'] ?? 'COP'}',
               ),
+              if (losses['explanation'] != null)
+                pw.Text(losses['explanation'].toString()),
+              if (((losses['estimations'] as List?) ?? const []).length > 1)
+                table(
+                  ['Periodo', 'Esperado', 'Cosechado', 'Perdido', 'Monto'],
+                  (losses['estimations'] as List)
+                      .cast<Map<String, dynamic>>()
+                      .map((row) {
+                        final currency = row['currency']?.toString() ?? 'COP';
+                        return [
+                          '${row['period_from']} a ${row['period_to']}',
+                          formatKg(row['expected_yield_kg'] as num?),
+                          formatKg(row['harvested_kg'] as num?),
+                          formatKg(row['lost_kg'] as num?),
+                          '${formatMoney(row['estimated_loss_amount'] as num?, currency)} $currency',
+                        ];
+                      })
+                      .toList(),
+                ),
+            ],
           ]),
           section('Conclusiones del periodo', [
             pw.Text(
@@ -508,11 +546,16 @@ class _ReportSetupScreenState extends State<ReportSetupScreen> {
               onPressed: _working ? null : _generate,
               child: const Text('Reintentar guardado del informe'),
             ),
-          PdfPreview(
-            build: (_) async => _pdfBytes!,
-            canChangePageFormat: false,
-            canChangeOrientation: false,
-            canDebug: false,
+          // PdfPreview tiene su propio scroll: dentro del ListView necesita una
+          // altura acotada o falla con "unbounded height constraints".
+          SizedBox(
+            height: MediaQuery.sizeOf(context).height * 0.7,
+            child: PdfPreview(
+              build: (_) async => _pdfBytes!,
+              canChangePageFormat: false,
+              canChangeOrientation: false,
+              canDebug: false,
+            ),
           ),
           TextButton(
             onPressed: () => context.pop(true),

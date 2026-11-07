@@ -62,6 +62,16 @@ import 'package:kroppi/features/my_crops/presentation/screens/plot_detail_screen
 import 'package:kroppi/features/sampling/presentation/cubit/sampling_cubit.dart';
 import 'package:kroppi/features/sampling/presentation/screens/sampling_screen.dart';
 import 'package:kroppi/features/care_log/presentation/screens/care_detail_screen.dart';
+import 'package:kroppi/features/harvests/domain/repositories/harvest_repository.dart';
+import 'package:kroppi/features/harvests/presentation/cubit/harvest_form_cubit.dart';
+import 'package:kroppi/features/harvests/presentation/cubit/harvest_list_cubit.dart';
+import 'package:kroppi/features/harvests/presentation/screens/harvest_form_screen.dart';
+import 'package:kroppi/features/harvests/presentation/screens/harvest_list_screen.dart';
+import 'package:kroppi/features/loss_estimation/domain/repositories/loss_repository.dart';
+import 'package:kroppi/features/loss_estimation/presentation/cubit/loss_form_cubit.dart';
+import 'package:kroppi/features/loss_estimation/presentation/cubit/loss_list_cubit.dart';
+import 'package:kroppi/features/loss_estimation/presentation/screens/loss_form_screen.dart';
+import 'package:kroppi/features/loss_estimation/presentation/screens/loss_list_screen.dart';
 import 'package:kroppi/features/care_log/presentation/screens/care_form_screen.dart';
 import 'package:kroppi/features/care_log/presentation/screens/care_list_screen.dart';
 import 'package:kroppi/features/plot_stats/presentation/screens/plot_stats_screen.dart';
@@ -155,6 +165,7 @@ class AppRouter {
           return BlocProvider(
             create: (context) => DiagnosisBloc(
               analyzeCropImageUseCase: context.read<AnalyzeCropImageUsecase>(),
+              sampleSource: context.read<MyCropsRemoteDataSource>(),
             ),
             child: DiagnosisScreen(userId: userId),
           );
@@ -240,18 +251,8 @@ class AppRouter {
         builder: (context, state) =>
             PlotFormScreen(cropId: state.pathParameters['cropId']!),
       ),
-      GoRoute(
-        path: AppRoutes.plotDetail,
-        builder: (context, state) {
-          final plotId = state.pathParameters['plotId']!;
-          return BlocProvider(
-            create: (context) =>
-                PlotDetailCubit(context.read<MyCropsRemoteDataSource>(), plotId)
-                  ..load(),
-            child: PlotDetailScreen(plotId: plotId),
-          );
-        },
-      ),
+      // Las rutas fijas de /plots van antes de /plots/:plotId: GoRouter usa la
+      // primera coincidencia y "/plots/danger" se tomaba como un plotId.
       GoRoute(
         path: AppRoutes.plotOverview,
         builder: (context, state) => const PlotsOverviewScreen(),
@@ -265,6 +266,93 @@ class AppRouter {
         path: AppRoutes.plotDanger,
         builder: (context, state) =>
             const PlotsOverviewScreen(filter: PlotsOverviewFilter.danger),
+      ),
+      GoRoute(
+        path: AppRoutes.plotDetail,
+        builder: (context, state) {
+          final plotId = state.pathParameters['plotId']!;
+          return BlocProvider(
+            create: (context) =>
+                PlotDetailCubit(context.read<MyCropsRemoteDataSource>(), plotId)
+                  ..load(),
+            child: PlotDetailScreen(plotId: plotId),
+          );
+        },
+      ),
+      // Cosechas y pérdidas: "/new" antes que "/:id" (primera coincidencia).
+      GoRoute(
+        path: AppRoutes.harvests,
+        builder: (context, state) {
+          final plotId = state.pathParameters['plotId']!;
+          return BlocProvider(
+            create: (context) =>
+                HarvestListCubit(context.read<HarvestRepository>(), plotId),
+            child: HarvestListScreen(plotId: plotId),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.harvestNew,
+        builder: (context, state) {
+          final plotId = state.pathParameters['plotId']!;
+          return BlocProvider(
+            create: (context) => HarvestFormCubit(
+              context.read<HarvestRepository>(),
+              plotId: plotId,
+            ),
+            child: HarvestFormScreen(plotId: plotId),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.harvestDetail,
+        builder: (context, state) {
+          final plotId = state.pathParameters['plotId']!;
+          return BlocProvider(
+            create: (context) => HarvestFormCubit(
+              context.read<HarvestRepository>(),
+              plotId: plotId,
+              harvestId: state.pathParameters['harvestId'],
+            ),
+            child: HarvestFormScreen(plotId: plotId),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.loss,
+        builder: (context, state) {
+          final plotId = state.pathParameters['plotId']!;
+          return BlocProvider(
+            create: (context) =>
+                LossListCubit(context.read<LossRepository>(), plotId),
+            child: LossListScreen(plotId: plotId),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.lossNew,
+        builder: (context, state) {
+          final plotId = state.pathParameters['plotId']!;
+          return BlocProvider(
+            create: (context) =>
+                LossFormCubit(context.read<LossRepository>(), plotId: plotId),
+            child: LossFormScreen(plotId: plotId),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.lossDetail,
+        builder: (context, state) {
+          final plotId = state.pathParameters['plotId']!;
+          return BlocProvider(
+            create: (context) => LossFormCubit(
+              context.read<LossRepository>(),
+              plotId: plotId,
+              estimationId: state.pathParameters['estimationId'],
+            ),
+            child: LossFormScreen(plotId: plotId),
+          );
+        },
       ),
       GoRoute(
         path: AppRoutes.careList,

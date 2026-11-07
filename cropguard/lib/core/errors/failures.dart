@@ -35,3 +35,8 @@ class NotFoundFailure extends Failure {
 class UnknownFailure extends Failure {
   const UnknownFailure(super.message);
 }
+
+/// Datos rechazados por el backend (400/422). El mensaje viene del `detail`.
+class ValidationFailure extends Failure {
+  const ValidationFailure(super.message);
+}

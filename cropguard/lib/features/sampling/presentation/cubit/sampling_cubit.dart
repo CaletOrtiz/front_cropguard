@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
@@ -62,13 +64,13 @@ class SamplingState extends Equatable {
   final SampleResult? result;
   final String? message;
 
-  /// Ids de todos los diagnósticos de esta sesión (el backend descarta
-  /// los no concluyentes al cerrar).
-  List<String> get ids => scans.map((s) => s.id).toList();
-
   /// Fotos concluyentes: son las que realmente cuentan como plantas evaluadas.
   int get evaluated =>
       scans.where((s) => s.outcome != ScanOutcome.inconclusive).length;
+
+  /// Fotos concluyentes con enfermedad: plantas afectadas.
+  int get affected =>
+      scans.where((s) => s.outcome == ScanOutcome.diseased).length;
 
   /// Fotos con confianza baja (no cuentan en el resultado).
   int get inconclusive =>
@@ -117,11 +119,9 @@ class SamplingCubit extends Cubit<SamplingState> {
   final AnalyzeCropImageUsecase _analyze;
   final MyCropsRemoteDataSource _source;
 
-  /// Solo para avisar en pantalla; la decisión real la toma el backend.
-  static const _umbral = 0.7;
-
-  /// Nombres que el backend usa para "sin enfermedad".
-  static const _sanos = {'Hoja sana', 'Planta sana'};
+  /// Muestreo creado en el backend con la primera foto (las fotos deben
+  /// pertenecer a un muestreo existente). Null hasta entonces.
+  String? _sampleId;
 
   /// ¿Se pueden seguir escaneando plantas? (no pasar de las que tiene el lote)
   bool get canScan {
@@ -141,17 +141,19 @@ class SamplingCubit extends Cubit<SamplingState> {
     if (!canScan) return;
     emit(state.copyWith(status: SamplingStatus.scanning));
     try {
+      // Cantidades provisionales; finish() guarda las reales.
+      final sampleId = _sampleId ??= await _source.startSample(
+        plotId,
+        plantsEvaluated: target,
+      );
       final d = await _analyze(
         imageFile: image,
         userId: userId,
-        cropSlug: cropSlug,
-        plotId: plotId,
+        plotSamplesId: sampleId,
       );
-      final outcome = d.confidence < _umbral
+      final outcome = !d.isConclusive
           ? ScanOutcome.inconclusive
-          : (_sanos.contains(d.diseaseName)
-                ? ScanOutcome.healthy
-                : ScanOutcome.diseased);
+          : (d.isHealthy ? ScanOutcome.healthy : ScanOutcome.diseased);
       if (isClosed) return;
       emit(
         state.copyWith(
@@ -176,24 +178,61 @@ class SamplingCubit extends Cubit<SamplingState> {
   }
 
   /// Quita una foto del muestreo (por ejemplo si salió mal o se tomó por error).
-  void remove(int index) {
+  /// También borra el diagnóstico en el backend para que no cuente en el muestreo.
+  Future<void> remove(int index) async {
     if (state.isBusy || index < 0 || index >= state.scans.length) return;
-    final copy = [...state.scans]..removeAt(index);
-    emit(state.copyWith(status: SamplingStatus.idle, scans: copy));
-  }
-
-  Future<void> finish() async {
-    if (state.isBusy || state.evaluated == 0) return;
-    emit(state.copyWith(status: SamplingStatus.closing));
+    final scan = state.scans[index];
+    emit(state.copyWith(status: SamplingStatus.scanning));
     try {
-      final r = await _source.closeSample(plotId, state.ids);
+      await _source.deleteDiagnosis(scan.id);
       if (isClosed) return;
-      emit(state.copyWith(status: SamplingStatus.done, result: r));
+      emit(
+        state.copyWith(
+          status: SamplingStatus.idle,
+          scans: [...state.scans]..remove(scan),
+        ),
+      );
     } catch (e) {
       if (isClosed) return;
       emit(
         state.copyWith(status: SamplingStatus.failure, message: e.toString()),
       );
     }
+  }
+
+  Future<void> finish() async {
+    final sampleId = _sampleId;
+    if (state.isBusy || state.evaluated == 0 || sampleId == null) return;
+    emit(state.copyWith(status: SamplingStatus.closing));
+    try {
+      final r = await _source.finishSample(
+        sampleId,
+        plantsEvaluated: state.evaluated,
+        plantsAffected: state.affected,
+      );
+      if (isClosed) return;
+      emit(
+        state.copyWith(
+          status: SamplingStatus.done,
+          result: r.copyWith(discarded: state.inconclusive),
+        ),
+      );
+    } catch (e) {
+      if (isClosed) return;
+      emit(
+        state.copyWith(status: SamplingStatus.failure, message: e.toString()),
+      );
+    }
+  }
+
+  /// Si se sale sin finalizar, el muestreo provisional se borra (con sus fotos)
+  /// para no dejar cantidades falsas en el lote.
+  @override
+  Future<void> close() {
+    final sampleId = _sampleId;
+    if (sampleId != null && state.status != SamplingStatus.done) {
+      unawaited(_source.discardSample(sampleId).catchError((_) {}));
+    }
+    return super.close();
   }
 }

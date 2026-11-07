@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:kroppi/core/network/api/api_error_message.dart';
+import 'package:kroppi/core/refresh/plot_data_refresh.dart';
 import 'package:kroppi/features/plot_modules/data/plot_modules_remote_data_source.dart';
 import 'package:kroppi/navigation/app_routes.dart';
 
@@ -33,19 +34,27 @@ class _PlotTimelineScreenState extends State<PlotTimelineScreen> {
   bool _loading = false;
   bool _hasMore = true;
 
+  final _refresh = PlotDataRefreshNotifier.instance;
+
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
+    _refresh.addListener(_onPlotChanged);
     _load(reset: true);
   }
 
   @override
   void dispose() {
+    _refresh.removeListener(_onPlotChanged);
     _scroll
       ..removeListener(_onScroll)
       ..dispose();
     super.dispose();
+  }
+
+  void _onPlotChanged() {
+    if (_refresh.lastPlotId == widget.plotId && mounted) _load(reset: true);
   }
 
   void _onScroll() {
@@ -220,13 +229,17 @@ class _PlotTimelineScreenState extends State<PlotTimelineScreen> {
         if (ids.isNotEmpty) context.push(AppRoutes.diagnosisDetailPath(ids.first.toString()));
         break;
       case 'harvest':
+        context.push(
+          AppRoutes.harvestDetailPath(widget.plotId, ref['id'] as String),
+        );
+        break;
       case 'loss':
-        _showDetails(item);
+        context.push(
+          AppRoutes.lossDetailPath(widget.plotId, ref['id'] as String),
+        );
         break;
       default:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('El detalle de este registro todavía no está disponible.')),
-        );
+        _showDetails(item);
         break;
     }
   }

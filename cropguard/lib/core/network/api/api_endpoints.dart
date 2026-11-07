@@ -46,4 +46,14 @@ class ApiEndpoints {
   static String plotReportData(String plotId) => '/plots/$plotId/report-data';
   static String plotReports(String plotId) => '/plots/$plotId/reports';
   static String report(String reportId) => '/reports/$reportId';
+
+  static String plotHarvests(String plotId) => '/plots/$plotId/harvests';
+  static String harvest(String id) => '/harvests/$id';
+  static String plotLossEstimations(String plotId) =>
+      '/plots/$plotId/loss-estimations';
+  static String plotLossDefaults(String plotId) =>
+      '/plots/$plotId/loss-estimations/defaults';
+  static String plotLossPreview(String plotId) =>
+      '/plots/$plotId/loss-estimations/preview';
+  static String lossEstimation(String id) => '/loss-estimations/$id';
 }

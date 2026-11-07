@@ -1,7 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'plot.dart';
 
-/// Resultado de cerrar un muestreo (POST /plots/{id}/samples).
+/// Resultado de cerrar un muestreo (PATCH /samples/{id}).
 class SampleResult extends Equatable {
   const SampleResult({
     required this.evaluated,
@@ -10,6 +10,14 @@ class SampleResult extends Equatable {
     required this.incidencePct,
     required this.status,
   });
+
+  SampleResult copyWith({int? discarded}) => SampleResult(
+    evaluated: evaluated,
+    affected: affected,
+    discarded: discarded ?? this.discarded,
+    incidencePct: incidencePct,
+    status: status,
+  );
 
   final int evaluated;
   final int affected;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/core/refresh/plot_data_refresh.dart';
 import 'package:kroppi/features/farms/data/datasources/farm_remote_data_source.dart';
 import 'package:kroppi/features/farms/domain/entities/farm_details.dart';
 import 'package:kroppi/features/history/presentation/utils/date_formatter.dart';
@@ -28,10 +29,23 @@ class _FarmPlotDetailScreenState extends State<FarmPlotDetailScreen> {
   String? _error;
   bool _loading = true;
 
+  final _refresh = PlotDataRefreshNotifier.instance;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    _refresh.addListener(_onPlotChanged);
+  }
+
+  @override
+  void dispose() {
+    _refresh.removeListener(_onPlotChanged);
+    super.dispose();
+  }
+
+  void _onPlotChanged() {
+    if (_refresh.lastPlotId == widget.plotId && mounted) _load();
   }
 
   Future<void> _load() async {
@@ -181,6 +195,18 @@ class _FarmPlotDetailScreenState extends State<FarmPlotDetailScreen> {
                         icon: Icons.medication_outlined,
                         onTap: () =>
                             context.push(AppRoutes.careListPath(widget.plotId)),
+                      ),
+                      _ModuleButton(
+                        label: 'Cosechas',
+                        icon: Icons.agriculture,
+                        onTap: () =>
+                            context.push(AppRoutes.harvestsPath(widget.plotId)),
+                      ),
+                      _ModuleButton(
+                        label: 'Pérdida estimada',
+                        icon: Icons.trending_down,
+                        onTap: () =>
+                            context.push(AppRoutes.lossPath(widget.plotId)),
                       ),
                       _ModuleButton(
                         label: 'Estadísticas',

@@ -23,15 +23,13 @@ class CropDiagnosisRemoteDataSource {
     required XFile imageFile,
     required String userId,
     String? prompt,
-    String cropSlug = 'cafe',
-    String? plotId,
+    required String plotSamplesId,
     double? latitude,
     double? longitude,
   }) async {
     final responseMap = await _backendService.createDiagnosis(
       imageFile: imageFile,
-      cropSlug: cropSlug,
-      plotId: plotId,
+      plotSamplesId: plotSamplesId,
       latitude: latitude,
       longitude: longitude,
     );

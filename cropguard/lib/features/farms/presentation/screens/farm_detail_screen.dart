@@ -402,11 +402,14 @@ class _CropCardState extends State<_CropCard> {
   @override
   Widget build(BuildContext context) {
     final crop = widget.crop;
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
+    // Material (en vez de Container con color) para que los ListTile e InkWell
+    // internos pinten sus efectos sobre la tarjeta.
+    return Material(
+      color: Colors.white,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
+        side: const BorderSide(color: AppColors.border),
       ),
       child: Column(
         children: [
@@ -530,6 +533,10 @@ class _CropCardState extends State<_CropCard> {
                       ),
                       const Spacer(),
                       OutlinedButton.icon(
+                        // El tema usa ancho infinito; dentro de un Row hay que acotarlo.
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 40),
+                        ),
                         onPressed: () =>
                             widget.onStartSampling(crop.plots[index]),
                         icon: const Icon(Icons.play_arrow_rounded, size: 17),

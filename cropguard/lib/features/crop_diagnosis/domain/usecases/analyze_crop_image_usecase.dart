@@ -12,8 +12,7 @@ class AnalyzeCropImageUsecase {
     required XFile imageFile,
     required String userId,
     String? prompt,
-    String cropSlug = 'cafe',
-    String? plotId,
+    required String plotSamplesId,
     double? latitude,
     double? longitude,
   }) async {
@@ -21,8 +20,7 @@ class AnalyzeCropImageUsecase {
       imageFile: imageFile,
       userId: userId,
       prompt: prompt,
-      cropSlug: cropSlug,
-      plotId: plotId,
+      plotSamplesId: plotSamplesId,
       latitude: latitude,
       longitude: longitude,
     );

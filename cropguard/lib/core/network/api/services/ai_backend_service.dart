@@ -96,13 +96,12 @@ class AiBackendService {
 
   /// Envía la imagen mediante multipart/form-data según el contrato:
   /// - `file`: obligatorio (JPG, PNG o WEBP de hasta 10 MB).
-  /// - `crop_slug`: opcional (por defecto 'cafe').
-  /// - `plot_id`: opcional (UUID del lote si se escanea desde un muestreo).
+  /// - `plot_samples_id`: obligatorio (UUID del muestreo al que pertenece la
+  ///   foto; el backend deduce el lote y el cultivo a partir de él).
   /// - `latitude` y `longitude`: opcionales (ambos o ninguno).
   Future<Map<String, dynamic>> createDiagnosis({
     required XFile imageFile,
-    String cropSlug = 'cafe',
-    String? plotId,
+    required String plotSamplesId,
     double? latitude,
     double? longitude,
   }) async {
@@ -130,13 +129,8 @@ class AiBackendService {
 
       final formMap = <String, dynamic>{
         'file': multipartFile,
-        'crop_slug': cropSlug,
+        'plot_samples_id': plotSamplesId,
       };
-
-      // Asocia la foto a un lote (sesión de muestreo)
-      if (plotId != null) {
-        formMap['plot_id'] = plotId;
-      }
 
       // Latitud y longitud deben enviarse ambos o ninguno
       if (latitude != null && longitude != null) {

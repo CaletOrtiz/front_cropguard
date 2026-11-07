@@ -148,6 +148,7 @@ class _PlotsOverviewScreenState extends State<PlotsOverviewScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       OutlinedButton.icon(
+                        style: _pagerStyle,
                         onPressed: safePage == 0
                             ? null
                             : () => setState(() => _page = safePage - 1),
@@ -156,6 +157,7 @@ class _PlotsOverviewScreenState extends State<PlotsOverviewScreen> {
                       ),
                       Text('Página ${safePage + 1} de $pageCount'),
                       OutlinedButton.icon(
+                        style: _pagerStyle,
                         onPressed: safePage + 1 >= pageCount
                             ? null
                             : () => setState(() => _page = safePage + 1),
@@ -170,6 +172,9 @@ class _PlotsOverviewScreenState extends State<PlotsOverviewScreen> {
     );
   }
 }
+
+// El tema usa ancho infinito para OutlinedButton; dentro de un Row hay que acotarlo.
+final _pagerStyle = OutlinedButton.styleFrom(minimumSize: const Size(0, 40));
 
 class _PlotEntry {
   const _PlotEntry({

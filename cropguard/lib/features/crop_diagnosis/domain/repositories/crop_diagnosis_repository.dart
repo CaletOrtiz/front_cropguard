@@ -7,8 +7,7 @@ abstract class CropDiagnosisRepository {
     required XFile imageFile,
     required String userId,
     String? prompt,
-    String cropSlug = 'cafe',
-    String? plotId,
+    required String plotSamplesId,
     double? latitude,
     double? longitude,
   });
