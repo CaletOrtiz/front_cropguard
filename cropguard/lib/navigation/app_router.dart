@@ -101,8 +101,14 @@ class AppRouter {
       // Pestañas con barra de navegación inferior
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) => BlocProvider(
-          create: (context) =>
-              HomeCubit(context.read<FarmRemoteDataSource>())..load(),
+          create: (context) => HomeCubit(
+            context.read<FarmRemoteDataSource>(),
+            GetDiagnosisHistoryUsecase(
+              HistoryRepositoryImpl(
+                HistoryRemoteDataSource(app_supabase.SupabaseClient.client),
+              ),
+            ),
+          )..load(),
           child: MainShell(navigationShell: navigationShell),
         ),
         branches: [
@@ -161,7 +167,18 @@ class AppRouter {
       GoRoute(
         path: AppRoutes.diagnose,
         builder: (context, state) {
-          final userId = state.extra as String? ?? 'id_usuario_default';
+          final extra = state.extra;
+          final authState = context.read<AuthBloc>().state;
+          final userId = extra is String
+              ? extra
+              : authState is AuthAuthenticated
+              ? authState.user.id
+              : null;
+          if (userId == null || userId.isEmpty) {
+            return const PlaceholderScreen(
+              title: 'Inicia sesión para diagnosticar',
+            );
+          }
           return BlocProvider(
             create: (context) => DiagnosisBloc(
               analyzeCropImageUseCase: context.read<AnalyzeCropImageUsecase>(),

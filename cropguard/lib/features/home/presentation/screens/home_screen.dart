@@ -11,6 +11,8 @@ import 'package:kroppi/features/home/presentation/widgets/home_summary.dart';
 import 'package:kroppi/features/home/presentation/widgets/pending_sampling_card.dart';
 import 'package:kroppi/features/home/presentation/widgets/quick_access_header.dart';
 import 'package:kroppi/features/home/presentation/widgets/quick_access_tile.dart';
+import 'package:kroppi/features/home/presentation/widgets/recent_diagnoses_section.dart';
+import 'package:kroppi/features/history/domain/entities/diagnosis_record.dart';
 import 'package:kroppi/features/sampling/presentation/cubit/sampling_cubit.dart';
 import 'package:kroppi/navigation/app_routes.dart';
 
@@ -58,7 +60,15 @@ class HomeScreen extends StatelessWidget {
                             onRetry: context.read<HomeCubit>().load,
                           )
                         else if (dashboard != null)
-                          _DashboardContent(dashboard: dashboard),
+                          _DashboardContent(
+                            dashboard: dashboard,
+                            recentDiagnoses: homeState.recentDiagnoses,
+                            recentDiagnosesStatus:
+                                homeState.recentDiagnosesStatus,
+                            recentDiagnosesMessage:
+                                homeState.recentDiagnosesMessage,
+                            onRetry: context.read<HomeCubit>().load,
+                          ),
                       ],
                     ),
                   ),
@@ -87,17 +97,17 @@ class _HomeHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                AppStrings.greeting,
-                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                'Inicio',
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
               Text(
-                displayName,
+                '¡Buen día, $displayName!',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 24,
+                  fontSize: 21,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.primaryDark,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],
@@ -119,9 +129,18 @@ class _HomeHeader extends StatelessWidget {
 }
 
 class _DashboardContent extends StatelessWidget {
-  const _DashboardContent({required this.dashboard});
-
+  const _DashboardContent({
+    required this.dashboard,
+    required this.recentDiagnoses,
+    required this.recentDiagnosesStatus,
+    required this.recentDiagnosesMessage,
+    required this.onRetry,
+  });
   final HomeDashboard dashboard;
+  final List<DiagnosisRecord> recentDiagnoses;
+  final RecentDiagnosesStatus recentDiagnosesStatus;
+  final String? recentDiagnosesMessage;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -135,8 +154,23 @@ class _DashboardContent extends StatelessWidget {
           onOpenAlerts: () => context.push(AppRoutes.plotAlerts),
           onOpenDanger: () => context.push(AppRoutes.plotDanger),
         ),
-        const SizedBox(height: 20),
-        const SizedBox(height: 28),
+        const SizedBox(height: 24),
+        RecentDiagnosesSection(
+          records: recentDiagnoses,
+          isLoading:
+              recentDiagnosesStatus == RecentDiagnosesStatus.loading ||
+              recentDiagnosesStatus == RecentDiagnosesStatus.initial,
+          errorMessage: recentDiagnosesStatus == RecentDiagnosesStatus.failure
+              ? recentDiagnosesMessage
+              : null,
+          onRetry: onRetry,
+          onOpenHistory: () => context.go(AppRoutes.history),
+          onOpenDiagnosis: (record) => context.push(
+            AppRoutes.diagnosisDetailPath(record.id),
+            extra: record,
+          ),
+        ),
+        const SizedBox(height: 24),
         const Text(
           AppStrings.pendingMonitoring,
           style: TextStyle(
