@@ -16,8 +16,20 @@ class DiagnosisRecordModel extends DiagnosisRecord {
 
   final String? imageUrl;
 
+  static Map<String, dynamic>? _asMap(dynamic value) {
+    if (value is Map) return Map<String, dynamic>.from(value);
+    if (value is List && value.isNotEmpty && value.first is Map) {
+      return Map<String, dynamic>.from(value.first as Map);
+    }
+    return null;
+  }
+
   factory DiagnosisRecordModel.fromJson(Map<String, dynamic> json) {
-    final crop = json['crop_type'] as Map<String, dynamic>? ?? {};
+    final plotSample = _asMap(json['plot_samples']);
+    final plot = _asMap(plotSample?['plots']);
+    final crop = _asMap(plot?['crops']);
+    final cropType =
+        _asMap(crop?['crop_types']) ?? _asMap(json['crop_type']) ?? {};
     final ai = json['ai_prediction'] as Map<String, dynamic>? ?? {};
 
     List<String> strings(dynamic v) =>
@@ -26,14 +38,16 @@ class DiagnosisRecordModel extends DiagnosisRecord {
     final sci = ai['scientific_name']?.toString();
     final pathogen = (sci != null && sci != 'No especificado')
         ? sci
-        : (ai['disease_name']?.toString() ?? 'No identificado');
+        : (ai['disease_name']?.toString() ??
+              json['predicted_label']?.toString() ??
+              'No identificado');
 
     final recs = strings(json['recommendations']);
 
     return DiagnosisRecordModel(
       id: json['id'].toString(),
-      cropId: crop['slug']?.toString() ?? 'otros',
-      cropName: crop['name']?.toString() ?? 'Cultivo',
+      cropId: cropType['slug']?.toString() ?? 'otros',
+      cropName: cropType['name']?.toString() ?? 'Cultivo',
       pathogen: pathogen,
       pathogenType: ai['pathogen_type']?.toString() ?? '',
       date:

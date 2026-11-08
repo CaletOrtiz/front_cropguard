@@ -9,8 +9,17 @@ class HistoryRemoteDataSource {
 
   static const _select = '''
   id, image_url, created_at, ai_prediction, predicted_label, confidence,
-  recommendations, plot_id,
-  crop_type:crop_types ( id, name, slug )''';
+  recommendations,
+  plot_samples (
+    id, incidence_pct,
+    plots (
+      id, name,
+      crops (
+        id, name,
+        crop_types ( id, name, slug, icon_url )
+      )
+    )
+  )''';
 
   String get _userId {
     final id = _client.auth.currentUser?.id;
