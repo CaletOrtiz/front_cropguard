@@ -11,10 +11,8 @@ class DiagnosisRecordModel extends DiagnosisRecord {
     required super.confidence,
     required super.symptoms,
     required super.recommendations,
-    this.imageUrl,
+    super.imageUrl,
   });
-
-  final String? imageUrl;
 
   static Map<String, dynamic>? _asMap(dynamic value) {
     if (value is Map) return Map<String, dynamic>.from(value);

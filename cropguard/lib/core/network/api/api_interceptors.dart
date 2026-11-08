@@ -10,7 +10,10 @@ class ApiAuthInterceptor extends Interceptor {
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     final session = app_supabase.SupabaseClient.client.auth.currentSession;
     if (session != null && session.accessToken.isNotEmpty) {
-      options.headers['Authorization'] = 'Bearer ${session.accessToken}';
+      options.headers['Authorization'] = [
+        'Bearer',
+        session.accessToken,
+      ].join(' ');
     }
     handler.next(options);
   }

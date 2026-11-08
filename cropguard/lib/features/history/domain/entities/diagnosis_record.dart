@@ -9,6 +9,7 @@ class DiagnosisRecord {
     required this.confidence,
     required this.symptoms,
     required this.recommendations,
+    this.imageUrl,
   });
 
   final String id;
@@ -20,10 +21,9 @@ class DiagnosisRecord {
   final int confidence; // 0-100
   final List<String> symptoms;
   final List<String> recommendations;
+  final String? imageUrl;
 }
 
-/// Datos de ejemplo para construir la vista.
-/// TODO: reemplazar por diagnósticos reales (almacenamiento local o API).
 class SampleDiagnoses {
   SampleDiagnoses._();
 

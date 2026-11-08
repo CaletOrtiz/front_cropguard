@@ -4,7 +4,7 @@ import 'package:kroppi/core/constants/app_strings.dart';
 import 'package:kroppi/features/history/presentation/utils/date_formatter.dart';
 import 'package:kroppi/core/widgets/bullet_list.dart';
 import 'package:kroppi/core/widgets/confidence_badge.dart';
-import 'package:kroppi/core/widgets/crop_visual.dart';
+import 'package:kroppi/features/history/presentation/widgets/diagnosis_photo.dart';
 
 /// Contenido de un resultado de diagnóstico. Se usa tanto en el detalle
 /// del historial como, más adelante, en la pantalla de resultado en vivo.
@@ -18,6 +18,7 @@ class DiagnosisResultView extends StatelessWidget {
     required this.confidence,
     required this.symptoms,
     required this.recommendations,
+    this.imageUrl,
     this.date,
   });
 
@@ -28,6 +29,7 @@ class DiagnosisResultView extends StatelessWidget {
   final int confidence;
   final List<String> symptoms;
   final List<String> recommendations;
+  final String? imageUrl;
   final DateTime? date;
 
   @override
@@ -36,7 +38,8 @@ class DiagnosisResultView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Center(
-          child: CropVisual(
+          child: DiagnosisPhoto(
+            imageUrl: imageUrl,
             cropId: cropId,
             width: 180,
             height: 180,

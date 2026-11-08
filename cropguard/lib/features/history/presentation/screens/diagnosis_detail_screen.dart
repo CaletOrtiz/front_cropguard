@@ -36,6 +36,7 @@ class DiagnosisDetailScreen extends StatelessWidget {
             confidence: record.confidence,
             symptoms: record.symptoms,
             recommendations: record.recommendations,
+            imageUrl: record.imageUrl,
             date: record.date,
           ),
         ),

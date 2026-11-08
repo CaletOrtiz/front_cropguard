@@ -6,6 +6,7 @@ void main() {
     test('reads crop type from plot sample relationships', () {
       final record = DiagnosisRecordModel.fromJson({
         'id': 'diagnosis-1',
+        'image_url': 'https://storage.example.test/diagnosis/photo.jpg',
         'created_at': '2026-11-08T12:00:00Z',
         'predicted_label': 'Roya',
         'confidence': 0.9,
@@ -34,6 +35,10 @@ void main() {
       expect(record.cropName, 'Café');
       expect(record.pathogen, 'Roya');
       expect(record.confidence, 90);
+      expect(
+        record.imageUrl,
+        'https://storage.example.test/diagnosis/photo.jpg',
+      );
     });
 
     test('accepts array-shaped nested relationships', () {

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:kroppi/core/constants/app_colors.dart';
+import 'package:kroppi/core/widgets/confidence_badge.dart';
 import 'package:kroppi/features/history/domain/entities/diagnosis_record.dart';
 import 'package:kroppi/features/history/presentation/utils/date_formatter.dart';
-import 'package:kroppi/core/widgets/confidence_badge.dart';
-import 'package:kroppi/core/widgets/crop_visual.dart';
+import 'package:kroppi/features/history/presentation/widgets/diagnosis_photo.dart';
 
 class DiagnosisHistoryCard extends StatelessWidget {
   const DiagnosisHistoryCard({
@@ -31,7 +31,8 @@ class DiagnosisHistoryCard extends StatelessWidget {
           ),
           child: Row(
             children: [
-              CropVisual(
+              DiagnosisPhoto(
+                imageUrl: record.imageUrl,
                 cropId: record.cropId,
                 width: 64,
                 height: 64,
