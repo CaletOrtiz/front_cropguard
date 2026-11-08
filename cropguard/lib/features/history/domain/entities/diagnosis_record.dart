@@ -10,6 +10,12 @@ class DiagnosisRecord {
     required this.symptoms,
     required this.recommendations,
     this.imageUrl,
+    this.farmId,
+    this.farmName,
+    this.farmCropId,
+    this.farmCropName,
+    this.plotId,
+    this.plotName,
   });
 
   final String id;
@@ -22,6 +28,12 @@ class DiagnosisRecord {
   final List<String> symptoms;
   final List<String> recommendations;
   final String? imageUrl;
+  final String? farmId;
+  final String? farmName;
+  final String? farmCropId;
+  final String? farmCropName;
+  final String? plotId;
+  final String? plotName;
 }
 
 class SampleDiagnoses {

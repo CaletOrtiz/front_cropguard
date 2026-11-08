@@ -301,31 +301,39 @@ class _FarmSummary extends StatelessWidget {
   final FarmDetails details;
 
   @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Expanded(
-        child: _SummaryMetric(
-          icon: Icons.grass_rounded,
-          value: '${details.crops.length}',
-          label: 'Cultivos',
-        ),
+  Widget build(BuildContext context) {
+    final metrics = [
+      _SummaryMetric(
+        icon: Icons.grass_rounded,
+        value: '${details.crops.length}',
+        label: 'Cultivos',
       ),
-      Expanded(
-        child: _SummaryMetric(
-          icon: Icons.grid_view_rounded,
-          value: '${details.totalPlots}',
-          label: 'Lotes',
-        ),
+      _SummaryMetric(
+        icon: Icons.grid_view_rounded,
+        value: '${details.totalPlots}',
+        label: 'Lotes',
       ),
-      Expanded(
-        child: _SummaryMetric(
-          icon: Icons.landscape_outlined,
-          value: '${_formatArea(details.totalPlotAreaHa)} ha',
-          label: 'Área en lotes',
-        ),
+      _SummaryMetric(
+        icon: Icons.landscape_outlined,
+        value: '${_formatArea(details.totalPlotAreaHa)} ha',
+        label: 'Área en lotes',
       ),
-    ],
-  );
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth < 360 ? 2 : 3;
+        final width = (constraints.maxWidth - (columns - 1) * 8) / columns;
+        return Wrap(
+          spacing: 8,
+          runSpacing: 12,
+          children: [
+            for (final metric in metrics) SizedBox(width: width, child: metric),
+          ],
+        );
+      },
+    );
+  }
 }
 
 class _SummaryMetric extends StatelessWidget {
@@ -524,14 +532,16 @@ class _CropCardState extends State<_CropCard> {
                     right: 12,
                     bottom: 4,
                   ),
-                  child: Row(
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    spacing: 8,
+                    runSpacing: 4,
                     children: [
                       TextButton.icon(
                         onPressed: () => widget.onEditPlot(crop.plots[index]),
                         icon: const Icon(Icons.edit_outlined, size: 16),
                         label: const Text('Editar lote'),
                       ),
-                      const Spacer(),
                       OutlinedButton.icon(
                         // El tema usa ancho infinito; dentro de un Row hay que acotarlo.
                         style: OutlinedButton.styleFrom(
@@ -580,6 +590,8 @@ class _PlotRow extends StatelessWidget {
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       title: Text(
         plot.name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: const TextStyle(
           fontWeight: FontWeight.w600,
           color: AppColors.textPrimary,
@@ -598,7 +610,12 @@ class _PlotRow extends StatelessWidget {
         children: [
           Icon(Icons.circle, size: 9, color: health.color),
           const SizedBox(width: 6),
-          Text(health.label, style: TextStyle(color: health.color)),
+          Text(
+            health.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: health.color),
+          ),
           const SizedBox(width: 4),
           const Icon(Icons.chevron_right_rounded),
         ],

@@ -46,6 +46,8 @@ class DiagnosisHistoryCard extends StatelessWidget {
                   children: [
                     Text(
                       record.cropName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.textSecondary,
@@ -53,18 +55,24 @@ class DiagnosisHistoryCard extends StatelessWidget {
                     ),
                     Text(
                       record.pathogen,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 15,
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         ConfidenceBadge(confidence: record.confidence),
-                        const SizedBox(width: 8),
                         Text(
                           DateFormatter.short(record.date),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 11,
                             color: AppColors.textSecondary,

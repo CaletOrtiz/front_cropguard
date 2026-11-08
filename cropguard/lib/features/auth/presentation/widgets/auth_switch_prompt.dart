@@ -16,8 +16,9 @@ class AuthSwitchPrompt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         Text(prompt, style: const TextStyle(color: AppColors.textSecondary)),
         TextButton(

@@ -206,26 +206,35 @@ class _LossFormScreenState extends State<LossFormScreen> {
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: DateField(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final fields = [
+                DateField(
                   label: 'Desde*',
                   value: _from,
                   errorText: dateError,
                   onTap: () => _pickDate(isFrom: true),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DateField(
+                DateField(
                   label: 'Hasta*',
                   value: _to,
                   errorText: dateError ?? (_from != null ? periodError : null),
                   onTap: () => _pickDate(isFrom: false),
                 ),
-              ),
-            ],
+              ];
+              if (constraints.maxWidth < 420) {
+                return Column(
+                  children: [fields[0], const SizedBox(height: 12), fields[1]],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: fields[0]),
+                  const SizedBox(width: 12),
+                  Expanded(child: fields[1]),
+                ],
+              );
+            },
           ),
           if (futureWarning != null) _Warning(futureWarning),
           const SizedBox(height: 16),

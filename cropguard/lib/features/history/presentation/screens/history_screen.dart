@@ -45,9 +45,52 @@ class _HistoryScreenState extends State<HistoryScreen> {
       final matchesQuery =
           _query.isEmpty ||
           record.pathogen.toLowerCase().contains(_query) ||
-          record.cropName.toLowerCase().contains(_query);
+          record.cropName.toLowerCase().contains(_query) ||
+          (record.farmName?.toLowerCase().contains(_query) ?? false) ||
+          (record.farmCropName?.toLowerCase().contains(_query) ?? false) ||
+          (record.plotName?.toLowerCase().contains(_query) ?? false);
       return matchesCrop && matchesQuery;
     }).toList();
+  }
+
+  List<_FarmHistoryGroup> _groupByFarmAndCrop(List<DiagnosisRecord> records) {
+    final farms = <String, _FarmHistoryGroup>{};
+
+    for (final record in records) {
+      final farmKey = record.farmId ?? 'unassigned-farm';
+      final farm = farms.putIfAbsent(
+        farmKey,
+        () => _FarmHistoryGroup(
+          name: record.farmName?.trim().isNotEmpty == true
+              ? record.farmName!
+              : 'Finca sin identificar',
+        ),
+      );
+
+      final cropKey = record.farmCropId ?? 'unassigned-crop';
+      final crop = farm.crops.putIfAbsent(
+        cropKey,
+        () => _CropHistoryGroup(
+          name: record.farmCropName?.trim().isNotEmpty == true
+              ? record.farmCropName!
+              : record.cropName,
+          typeName: record.cropName,
+        ),
+      );
+
+      final plotKey = record.plotId ?? 'unassigned-plot';
+      final plot = crop.plots.putIfAbsent(
+        plotKey,
+        () => _PlotHistoryGroup(
+          name: record.plotName?.trim().isNotEmpty == true
+              ? record.plotName!
+              : 'Lote sin identificar',
+        ),
+      );
+      plot.records.add(record);
+    }
+
+    return farms.values.toList();
   }
 
   @override
@@ -113,6 +156,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ? _selectedCrop
         : AppStrings.filterAll;
     final results = _filtered(state.records, selected);
+    final farmGroups = _groupByFarmAndCrop(results);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -157,15 +201,118 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 : ListView.separated(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.only(top: 8, bottom: 24),
-                    itemCount: results.length,
+                    itemCount: farmGroups.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (context, index) {
-                      final record = results[index];
-                      return DiagnosisHistoryCard(
-                        record: record,
-                        onTap: () => context.push(
-                          AppRoutes.diagnosisDetailPath(record.id),
-                          extra: record,
+                      final farm = farmGroups[index];
+                      return Card(
+                        margin: EdgeInsets.zero,
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          side: const BorderSide(color: AppColors.border),
+                        ),
+                        child: ExpansionTile(
+                          tilePadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                          ),
+                          childrenPadding: const EdgeInsets.only(bottom: 8),
+                          visualDensity: VisualDensity.compact,
+                          leading: const Icon(
+                            Icons.agriculture_outlined,
+                            color: AppColors.primary,
+                          ),
+                          title: Text(
+                            farm.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primaryDark,
+                            ),
+                          ),
+                          subtitle: Text(
+                            '${farm.diagnosisCount} diagnósticos · '
+                            '${farm.crops.length} cultivos',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          children: [
+                            for (final crop in farm.crops.values)
+                              ExpansionTile(
+                                tilePadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                childrenPadding: const EdgeInsets.only(
+                                  bottom: 8,
+                                ),
+                                visualDensity: VisualDensity.compact,
+                                leading: const Icon(
+                                  Icons.eco_outlined,
+                                  color: AppColors.primary,
+                                ),
+                                title: Text(
+                                  crop.name,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  '${crop.typeName} · '
+                                  '${crop.diagnosisCount} diagnósticos',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                children: [
+                                  for (final plot in crop.plots.values)
+                                    ExpansionTile(
+                                      tilePadding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                      ),
+                                      childrenPadding: const EdgeInsets.only(
+                                        bottom: 8,
+                                      ),
+                                      visualDensity: VisualDensity.compact,
+                                      leading: const Icon(
+                                        Icons.grid_view_rounded,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                      title: Text(
+                                        plot.name,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      subtitle: Text(
+                                        '${plot.records.length} diagnósticos',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      children: [
+                                        for (final record in plot.records)
+                                          Padding(
+                                            padding: const EdgeInsets.fromLTRB(
+                                              8,
+                                              0,
+                                              8,
+                                              8,
+                                            ),
+                                            child: DiagnosisHistoryCard(
+                                              record: record,
+                                              onTap: () => context.push(
+                                                AppRoutes.diagnosisDetailPath(
+                                                  record.id,
+                                                ),
+                                                extra: record,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                ],
+                              ),
+                          ],
                         ),
                       );
                     },
@@ -175,6 +322,34 @@ class _HistoryScreenState extends State<HistoryScreen> {
       ],
     );
   }
+}
+
+class _FarmHistoryGroup {
+  _FarmHistoryGroup({required this.name});
+
+  final String name;
+  final Map<String, _CropHistoryGroup> crops = {};
+
+  int get diagnosisCount =>
+      crops.values.fold(0, (total, crop) => total + crop.diagnosisCount);
+}
+
+class _CropHistoryGroup {
+  _CropHistoryGroup({required this.name, required this.typeName});
+
+  final String name;
+  final String typeName;
+  final Map<String, _PlotHistoryGroup> plots = {};
+
+  int get diagnosisCount =>
+      plots.values.fold(0, (total, plot) => total + plot.records.length);
+}
+
+class _PlotHistoryGroup {
+  _PlotHistoryGroup({required this.name});
+
+  final String name;
+  final List<DiagnosisRecord> records = [];
 }
 
 class _ErrorView extends StatelessWidget {

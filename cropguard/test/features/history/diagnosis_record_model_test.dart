@@ -19,7 +19,9 @@ void main() {
             'name': 'Lote norte',
             'crops': {
               'id': 'crop-1',
-              'name': 'Cultivo de café',
+              'farm_id': 'farm-1',
+              'name': 'Café de la parcela norte',
+              'farms': {'id': 'farm-1', 'name': 'Finca El Roble'},
               'crop_types': {
                 'id': 'type-1',
                 'name': 'Café',
@@ -35,6 +37,12 @@ void main() {
       expect(record.cropName, 'Café');
       expect(record.pathogen, 'Roya');
       expect(record.confidence, 90);
+      expect(record.farmId, 'farm-1');
+      expect(record.farmName, 'Finca El Roble');
+      expect(record.farmCropId, 'crop-1');
+      expect(record.farmCropName, 'Café de la parcela norte');
+      expect(record.plotId, 'plot-1');
+      expect(record.plotName, 'Lote norte');
       expect(
         record.imageUrl,
         'https://storage.example.test/diagnosis/photo.jpg',

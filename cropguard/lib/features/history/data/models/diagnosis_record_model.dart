@@ -12,6 +12,12 @@ class DiagnosisRecordModel extends DiagnosisRecord {
     required super.symptoms,
     required super.recommendations,
     super.imageUrl,
+    super.farmId,
+    super.farmName,
+    super.farmCropId,
+    super.farmCropName,
+    super.plotId,
+    super.plotName,
   });
 
   static Map<String, dynamic>? _asMap(dynamic value) {
@@ -26,6 +32,7 @@ class DiagnosisRecordModel extends DiagnosisRecord {
     final plotSample = _asMap(json['plot_samples']);
     final plot = _asMap(plotSample?['plots']);
     final crop = _asMap(plot?['crops']);
+    final farm = _asMap(crop?['farms']);
     final cropType =
         _asMap(crop?['crop_types']) ?? _asMap(json['crop_type']) ?? {};
     final ai = json['ai_prediction'] as Map<String, dynamic>? ?? {};
@@ -57,6 +64,12 @@ class DiagnosisRecordModel extends DiagnosisRecord {
       symptoms: strings(ai['symptoms']),
       recommendations: recs,
       imageUrl: json['image_url']?.toString(),
+      farmId: farm?['id']?.toString(),
+      farmName: farm?['name']?.toString(),
+      farmCropId: crop?['id']?.toString(),
+      farmCropName: crop?['name']?.toString(),
+      plotId: plot?['id']?.toString(),
+      plotName: plot?['name']?.toString(),
     );
   }
 }

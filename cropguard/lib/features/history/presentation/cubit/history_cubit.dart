@@ -37,7 +37,15 @@ class HistoryCubit extends Cubit<HistoryState> {
     if (state.isLoading) return;
     emit(HistoryState(status: HistoryStatus.loading, records: state.records));
     try {
-      final records = await _getHistory();
+      const pageSize = 100;
+      final records = <DiagnosisRecord>[];
+      var from = 0;
+      while (true) {
+        final page = await _getHistory(from: from, pageSize: pageSize);
+        records.addAll(page);
+        if (page.length < pageSize) break;
+        from += page.length;
+      }
       emit(HistoryState(status: HistoryStatus.success, records: records));
     } catch (error) {
       emit(

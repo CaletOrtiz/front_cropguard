@@ -144,8 +144,11 @@ class _PlotsOverviewScreenState extends State<PlotsOverviewScreen> {
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
                       OutlinedButton.icon(
                         style: _pagerStyle,
@@ -155,7 +158,10 @@ class _PlotsOverviewScreenState extends State<PlotsOverviewScreen> {
                         icon: const Icon(Icons.arrow_back_rounded),
                         label: const Text('Anterior'),
                       ),
-                      Text('Página ${safePage + 1} de $pageCount'),
+                      Text(
+                        'Página ${safePage + 1} de $pageCount',
+                        textAlign: TextAlign.center,
+                      ),
                       OutlinedButton.icon(
                         style: _pagerStyle,
                         onPressed: safePage + 1 >= pageCount
@@ -212,7 +218,11 @@ class _PlotCard extends StatelessWidget {
       child: ListTile(
         onTap: onTap,
         leading: Icon(Icons.grid_view_rounded, color: color),
-        title: Text(entry.plot.name),
+        title: Text(
+          entry.plot.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         subtitle: Text(
           '${entry.farm.name} · ${entry.crop.name}\n'
           '${entry.plot.areaHa} ha'
@@ -224,7 +234,12 @@ class _PlotCard extends StatelessWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(label, style: TextStyle(color: color)),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: color),
+            ),
             const SizedBox(width: 4),
             const Icon(Icons.chevron_right_rounded),
           ],

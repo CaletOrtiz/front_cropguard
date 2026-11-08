@@ -28,7 +28,7 @@ class PrimaryButton extends StatelessWidget {
     return Opacity(
       opacity: onPressed == null ? 0.5 : 1,
       child: Container(
-        height: AppSpacing.buttonHeight,
+        constraints: const BoxConstraints(minHeight: AppSpacing.buttonHeight),
         decoration: BoxDecoration(
           borderRadius: radius,
           color: dark ? const Color(0xFF1A1A1A) : null,
@@ -54,24 +54,29 @@ class PrimaryButton extends StatelessWidget {
           child: InkWell(
             borderRadius: radius,
             onTap: enabled ? onPressed : null,
-            child: Center(
-              child: isLoading
-                  ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        color: Colors.white,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Center(
+                child: isLoading
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        softWrap: true,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    )
-                  : Text(
-                      label,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+              ),
             ),
           ),
         ),

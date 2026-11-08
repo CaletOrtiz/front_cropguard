@@ -66,7 +66,11 @@ class DateField extends StatelessWidget {
         errorText: errorText,
         suffixIcon: const Icon(Icons.calendar_today_outlined),
       ),
-      child: Text(value == null ? 'Elegir fecha' : formatDay(value!)),
+      child: Text(
+        value == null ? 'Elegir fecha' : formatDay(value!),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
     ),
   );
 }

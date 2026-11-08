@@ -15,7 +15,8 @@ class HistoryRemoteDataSource {
     plots (
       id, name,
       crops (
-        id, name,
+        id, farm_id, name,
+        farms ( id, name ),
         crop_types ( id, name, slug, icon_url )
       )
     )
