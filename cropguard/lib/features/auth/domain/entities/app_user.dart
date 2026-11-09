@@ -11,6 +11,8 @@ class AppUser extends Equatable {
     this.municipality,
     this.department,
     this.avatarUrl,
+    this.planType = 'free',
+    this.premiumUntil,
   });
 
   final String id;
@@ -23,6 +25,18 @@ class AppUser extends Equatable {
   final String? municipality;
   final String? department;
   final String? avatarUrl;
+  final String planType;
+  final DateTime? premiumUntil;
+
+  bool isPremiumActiveAt(DateTime now) =>
+      planType.toLowerCase() == 'premium' &&
+      premiumUntil != null &&
+      premiumUntil!.toUtc().isAfter(now.toUtc());
+
+  bool isPremiumExpiredAt(DateTime now) =>
+      planType.toLowerCase() == 'premium' &&
+      premiumUntil != null &&
+      !isPremiumActiveAt(now);
 
   String get roleLabel => switch (role) {
     'AGRONOMIST' => 'Agrónomo',
@@ -49,5 +63,7 @@ class AppUser extends Equatable {
     municipality,
     department,
     avatarUrl,
+    planType,
+    premiumUntil,
   ];
 }

@@ -10,6 +10,8 @@ class AppUserModel extends AppUser {
     super.municipality,
     super.department,
     super.avatarUrl,
+    super.planType,
+    super.premiumUntil,
   });
 
   /// [row] es una fila de `public.profiles`; el correo viene de auth.users
@@ -36,6 +38,17 @@ class AppUserModel extends AppUser {
       municipality: text('municipality'),
       department: text('department'),
       avatarUrl: text('avatar_url'),
+      planType: text('plan_type')?.toLowerCase() ?? 'free',
+      premiumUntil: _parseUtcDate(row['premium_until']),
     );
+  }
+
+  static DateTime? _parseUtcDate(Object? value) {
+    if (value is DateTime) return value.toUtc();
+    if (value is! String || value.trim().isEmpty) return null;
+
+    final raw = value.trim();
+    final hasTimezone = RegExp(r'(?:[zZ]|[+-]\d{2}:?\d{2})$').hasMatch(raw);
+    return DateTime.tryParse(hasTimezone ? raw : '${raw}Z')?.toUtc();
   }
 }

@@ -32,6 +32,7 @@ class ApiEndpoints {
   /// **GET /diagnoses** (Requiere token)
   /// Lista los diagnósticos del usuario autenticado (soporta `limit` y `offset`).
   static const String diagnoses = '/diagnoses';
+  static const String createPayment = '/payments/create';
 
   /// **GET /diagnoses/{diagnostico_id}** (Requiere token)
   /// Obtiene un diagnóstico propio por su UUID.

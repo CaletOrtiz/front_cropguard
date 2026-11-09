@@ -17,6 +17,7 @@ class AppRoutes {
   static const notifications = '/notifications';
   static const help = '/help';
   static const personalData = '/profile/personal-data';
+  static const plans = '/profile/plans';
 
   // Cultivos y lotes del usuario (cropNew SIEMPRE antes de cropDetail)
   static const farmNew = '/farms/new';

@@ -124,6 +124,12 @@ class ProfileScreen extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               ProfileMenuTile(
+                icon: Icons.workspace_premium_outlined,
+                label: 'Planes',
+                onTap: () => context.push(AppRoutes.plans),
+              ),
+              const SizedBox(height: 10),
+              ProfileMenuTile(
                 icon: Icons.grass_rounded,
                 label: AppStrings.myFarms,
                 onTap: () => context.go(AppRoutes.farms),

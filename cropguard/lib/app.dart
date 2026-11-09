@@ -24,6 +24,9 @@ import 'package:kroppi/features/harvests/domain/repositories/harvest_repository.
 import 'package:kroppi/features/loss_estimation/data/repositories/loss_repository_impl.dart';
 import 'package:kroppi/features/loss_estimation/domain/repositories/loss_repository.dart';
 import 'package:kroppi/features/my_crops/data/datasources/my_crops_remote_data_source.dart';
+import 'package:kroppi/features/profile/data/datasources/premium_checkout_remote_data_source.dart';
+import 'package:kroppi/features/profile/data/repositories/premium_checkout_repository_impl.dart';
+import 'package:kroppi/features/profile/domain/usecases/create_premium_checkout_usecase.dart';
 import 'package:kroppi/navigation/app_router.dart';
 
 class KroppiApp extends StatelessWidget {
@@ -39,9 +42,22 @@ class KroppiApp extends StatelessWidget {
     final analyzeCropImageUsecase = AnalyzeCropImageUsecase(
       repository: CropDiagnosisRepositoryImpl(dioClient: FastApiClient.client),
     );
+    final getCurrentUser = GetCurrentUserUsecase(authRepository);
+    final createPremiumCheckout = CreatePremiumCheckoutUsecase(
+      PremiumCheckoutRepositoryImpl(
+        PremiumCheckoutRemoteDataSource(
+          FastApiClient.client,
+          app_supabase.SupabaseClient.client,
+        ),
+      ),
+    );
 
     return MultiRepositoryProvider(
       providers: [
+        RepositoryProvider<GetCurrentUserUsecase>.value(value: getCurrentUser),
+        RepositoryProvider<CreatePremiumCheckoutUsecase>.value(
+          value: createPremiumCheckout,
+        ),
         RepositoryProvider<AnalyzeCropImageUsecase>.value(
           value: analyzeCropImageUsecase,
         ),
@@ -62,7 +78,7 @@ class KroppiApp extends StatelessWidget {
           signInWithGoogle: SignInWithGoogleUsecase(authRepository),
           signInWithEmail: SignInWithEmailUsecase(authRepository),
           signUpWithEmail: SignUpWithEmailUsecase(authRepository),
-          getCurrentUser: GetCurrentUserUsecase(authRepository),
+          getCurrentUser: getCurrentUser,
           signOut: SignOutUsecase(authRepository),
         ),
         child: MaterialApp.router(

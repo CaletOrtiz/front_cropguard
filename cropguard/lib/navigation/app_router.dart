@@ -35,9 +35,11 @@ import 'package:kroppi/features/history/domain/usecases/get_diagnosis_history_us
 import 'package:kroppi/features/history/presentation/cubit/history_cubit.dart';
 import 'package:kroppi/features/profile/data/datasources/profile_remote_data_source.dart';
 import 'package:kroppi/features/profile/data/repositories/profile_repository_impl.dart';
+import 'package:kroppi/features/profile/presentation/cubit/plan_cubit.dart';
 import 'package:kroppi/features/profile/domain/usecases/update_profile_usecase.dart';
 import 'package:kroppi/features/profile/presentation/cubit/edit_profile_cubit.dart';
 import 'package:kroppi/features/profile/presentation/screens/personal_data_screen.dart';
+import 'package:kroppi/features/profile/presentation/screens/plans_screen.dart';
 import 'package:kroppi/features/profile/presentation/screens/profile_screen.dart';
 
 // Diagnóstico
@@ -468,6 +470,22 @@ class AppRouter {
           ),
           child: const PersonalDataScreen(),
         ),
+      ),
+      GoRoute(
+        path: AppRoutes.plans,
+        builder: (context, state) {
+          final authState = context.read<AuthBloc>().state;
+          return BlocProvider(
+            create: (context) => PlanCubit(
+              getCurrentUser: context.read(),
+              createPremiumCheckout: context.read(),
+              initialUser: authState is AuthAuthenticated
+                  ? authState.user
+                  : null,
+            ),
+            child: const PlansScreen(),
+          );
+        },
       ),
       GoRoute(
         path: AppRoutes.notifications,
