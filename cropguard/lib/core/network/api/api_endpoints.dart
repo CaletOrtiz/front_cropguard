@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'api_transport_policy.dart';
 
 /// Define los endpoints y la URL base para conectar con FastAPI.
 class ApiEndpoints {
@@ -14,6 +15,15 @@ class ApiEndpoints {
   /// `http://127.0.0.1:8000` conecta inmediatamente tanto en celular físico
   /// como en la web o Linux desktop.
   static String get defaultBaseUrl {
+    const configured = String.fromEnvironment('FASTAPI_BASE_URL');
+    if (configured.isNotEmpty) {
+      return const ApiTransportPolicy().validate(configured);
+    }
+    if (!kDebugMode) {
+      throw StateError(
+        'Configure FASTAPI_BASE_URL with HTTPS for release/profile.',
+      );
+    }
     if (kIsWeb) {
       return 'http://localhost:$port';
     }
@@ -36,10 +46,13 @@ class ApiEndpoints {
 
   /// **GET /diagnoses/{diagnostico_id}** (Requiere token)
   /// Obtiene un diagnóstico propio por su UUID.
-  static String diagnosisById(String diagnosticoId) => '/diagnoses/$diagnosticoId';
+  static String diagnosisById(String diagnosticoId) =>
+      '/diagnoses/$diagnosticoId';
 
-  static String careActivities(String plotId) => '/plots/$plotId/care-activities';
-  static String careActivity(String activityId) => '/care-activities/$activityId';
+  static String careActivities(String plotId) =>
+      '/plots/$plotId/care-activities';
+  static String careActivity(String activityId) =>
+      '/care-activities/$activityId';
   static String careEvidence(String activityId) =>
       '/care-activities/$activityId/evidence';
   static String plotStats(String plotId) => '/plots/$plotId/stats';
