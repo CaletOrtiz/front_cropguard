@@ -36,7 +36,10 @@ class KroppiApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final authRepository = AuthRepositoryImpl(
       AuthRemoteDataSource(
-        SupabaseAuthService(app_supabase.SupabaseClient.client),
+        SupabaseAuthService(
+          app_supabase.SupabaseClient.client,
+          sessionStorage: app_supabase.SupabaseClient.sessionStorage,
+        ),
       ),
     );
     final analyzeCropImageUsecase = AnalyzeCropImageUsecase(

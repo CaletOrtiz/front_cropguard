@@ -4,7 +4,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../domain/entities/sign_up_params.dart';
 
 class SupabaseAuthService {
-  SupabaseAuthService(this._client) : _googleSignIn = GoogleSignIn.instance;
+  SupabaseAuthService(this._client, {this.sessionStorage})
+    : _googleSignIn = GoogleSignIn.instance;
+
+  final LocalStorage? sessionStorage;
 
   final SupabaseClient _client;
   final GoogleSignIn _googleSignIn;
@@ -87,7 +90,13 @@ class SupabaseAuthService {
         await _googleSignIn.signOut();
       } catch (_) {}
     }
-    await _client.auth.signOut();
+    try {
+      await _client.auth.signOut();
+    } finally {
+      // SDK auth-state persistence is asynchronous. Confirm disk deletion
+      // before the UI reports a completed sign-out.
+      await sessionStorage?.removePersistedSession();
+    }
   }
 
   User? get currentUser => _client.auth.currentUser;

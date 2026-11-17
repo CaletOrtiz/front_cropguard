@@ -1,0 +1,49 @@
+{
+  "id_proposed": "H-09",
+  "owasp": "M9 Insecure Data Storage",
+  "baseline_commit": "4ad5cbe",
+  "versions": {
+    "flutter": "3.47.5",
+    "dart": "3.13.4",
+    "supabase_flutter": "2.18.0",
+    "gotrue": "2.27.2",
+    "shared_preferences": "2.5.6",
+    "flutter_secure_storage": "11.2.0"
+  },
+  "before": {
+    "sdk_default_session_storage": "SharedPreferencesLocalStorage",
+    "application_keystore_adapter_configured": false,
+    "baseline_test": "SDK session JSON readable in mocked preferences; native SDK code uses putString/commit"
+  },
+  "after": {
+    "merged_manifest_legacy_backup_rule": true,
+    "merged_manifest_android12_backup_rule": true,
+    "release_cleartext_still_disabled": true,
+    "auth_backup_rules.xml_packaged_sharedpref_exclusions": true,
+    "auth_data_extraction_rules.xml_packaged_sharedpref_exclusions": true,
+    "packaged_cloud_and_device_transfer_rules": true,
+    "keystore_provider_in_native_code": true,
+    "secure_auth_namespace_in_dart_aot": true,
+    "resolved_plugin_uses_android_keystore": true,
+    "resolved_plugin_uses_aes_gcm": true,
+    "full_test_suite_passed": true,
+    "analysis_passed": true,
+    "release_build_passed": true
+  },
+  "packaged_backup_resources": {
+    "fullBackupContent": {
+      "resource_id": "0x7f120000",
+      "apk_path": "res/a2.xml"
+    },
+    "dataExtractionRules": {
+      "resource_id": "0x7f120001",
+      "apk_path": "res/yU.xml"
+    }
+  },
+  "synthetic_tests_passed": 84,
+  "apk_sha256": "2d647a5dea25308dd65447bfc699fce89983e7c54e0279c3a977bc832d711add",
+  "apk_size_bytes": 24493625,
+  "physical_device_tests": "pending; no Android device connected",
+  "hardware_security_level": "not measured; Keystore integration does not guarantee StrongBox/TEE on every device",
+  "credential_values_in_report": false
+}
