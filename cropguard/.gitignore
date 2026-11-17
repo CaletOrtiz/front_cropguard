@@ -43,3 +43,14 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Generated source exports must stay local.
+repomix-output.*
+
+# Local configuration; client build values are still extractable from the app.
+.env
+.env.*
+!.env.example
+env.json
+env.*.json
+!env.example.json

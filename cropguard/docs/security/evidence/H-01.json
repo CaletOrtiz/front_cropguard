@@ -1,0 +1,186 @@
+{
+  "id": "H-01",
+  "owasp": "M1 Improper Credential Usage",
+  "date": "2026-11-16",
+  "scanner": "Gitleaks 8.30.1, official archive checksum verified",
+  "redaction": "Only rule, path, line, commit and classification are recorded. No secret/match/source fields.",
+  "history_scope_before": {
+    "frontend": {
+      "head": "48fc76d34a3036a22ed69b83035534c861bfebc7",
+      "shallow": "false",
+      "reachable_commits": 46,
+      "tracked_files": 384,
+      "scanner_exit": 1,
+      "findings": 6,
+      "rules": {
+        "generic-api-key": 6
+      }
+    },
+    "backend": {
+      "head": "0f184140869b59c85671ab15281a5097ae49ce48",
+      "shallow": "false",
+      "reachable_commits": 35,
+      "tracked_files": 115,
+      "scanner_exit": 0,
+      "findings": 0,
+      "rules": {}
+    }
+  },
+  "classified_history_findings": [
+    {
+      "rule": "generic-api-key",
+      "path": "cropguard/lib/core/network/supabase/supabase_client.dart",
+      "line": 5,
+      "commit": "c0cd148fa9a55da4e2f1d7b67faab2f30298cb0b",
+      "fingerprint": "c0cd148fa9a55da4e2f1d7b67faab2f30298cb0b:cropguard/lib/core/network/supabase/supabase_client.dart:generic-api-key:5",
+      "repository": "frontend",
+      "classification": [
+        "Supabase publishable (public client key)"
+      ]
+    },
+    {
+      "rule": "generic-api-key",
+      "path": "cropguard/lib/core/network/supabase/supabase_client.dart",
+      "line": 5,
+      "commit": "47221461dbcd9ed7f89f18acec35ecf6095dd240",
+      "fingerprint": "47221461dbcd9ed7f89f18acec35ecf6095dd240:cropguard/lib/core/network/supabase/supabase_client.dart:generic-api-key:5",
+      "repository": "frontend",
+      "classification": [
+        "Supabase publishable (public client key)"
+      ]
+    },
+    {
+      "rule": "generic-api-key",
+      "path": "cropguard/repomix-output.xml",
+      "line": 2721,
+      "commit": "c0cd148fa9a55da4e2f1d7b67faab2f30298cb0b",
+      "fingerprint": "c0cd148fa9a55da4e2f1d7b67faab2f30298cb0b:cropguard/repomix-output.xml:generic-api-key:2721",
+      "repository": "frontend",
+      "classification": [
+        "Supabase publishable (public client key)"
+      ]
+    },
+    {
+      "rule": "generic-api-key",
+      "path": "cropguard/repomix-output.xml",
+      "line": 2721,
+      "commit": "47221461dbcd9ed7f89f18acec35ecf6095dd240",
+      "fingerprint": "47221461dbcd9ed7f89f18acec35ecf6095dd240:cropguard/repomix-output.xml:generic-api-key:2721",
+      "repository": "frontend",
+      "classification": [
+        "Supabase publishable (public client key)"
+      ]
+    },
+    {
+      "rule": "generic-api-key",
+      "path": "cropguard/repomix-output.xml",
+      "line": 2147,
+      "commit": "a74ccbadbb37d714e4cff6bca227d34fd135dfd8",
+      "fingerprint": "a74ccbadbb37d714e4cff6bca227d34fd135dfd8:cropguard/repomix-output.xml:generic-api-key:2147",
+      "repository": "frontend",
+      "classification": [
+        "Supabase publishable (public client key)"
+      ]
+    },
+    {
+      "rule": "generic-api-key",
+      "path": "cropguard/lib/core/network/supabase_client.dart",
+      "line": 5,
+      "commit": "ad1adb82e54b0f502d9cea9cd4943ef850476ec1",
+      "fingerprint": "ad1adb82e54b0f502d9cea9cd4943ef850476ec1:cropguard/lib/core/network/supabase_client.dart:generic-api-key:5",
+      "repository": "frontend",
+      "classification": [
+        "Supabase publishable (public client key)"
+      ]
+    }
+  ],
+  "current_summary_before": {
+    "frontend": {
+      "exit_code": 1,
+      "findings": 1,
+      "rules": {
+        "generic-api-key": 1
+      },
+      "tracked_findings": 1
+    },
+    "backend": {
+      "exit_code": 1,
+      "findings": 2,
+      "rules": {
+        "generic-api-key": 2
+      },
+      "tracked_findings": 0
+    }
+  },
+  "current_summary_after": {
+    "frontend": {
+      "exit_code": 1,
+      "findings": 1,
+      "rules": {
+        "generic-api-key": 1
+      },
+      "tracked_findings": 1
+    },
+    "backend": {
+      "exit_code": 1,
+      "findings": 2,
+      "rules": {
+        "generic-api-key": 2
+      },
+      "tracked_findings": 0
+    }
+  },
+  "private_local_environment_to_historical_blob_comparison": {
+    "frontend": {
+      "blobs_checked": 716,
+      "matches": []
+    },
+    "backend": {
+      "blobs_checked": 170,
+      "matches": []
+    }
+  },
+  "local_private_values_compared_in_memory": 3,
+  "commit_messages_and_tags": {
+    "frontend": {
+      "commit_messages": 46,
+      "annotated_tags": 0,
+      "findings": []
+    },
+    "backend": {
+      "commit_messages": 35,
+      "annotated_tags": 0,
+      "findings": []
+    }
+  },
+  "confirmed_private_credentials_in_analyzed_git_history": 0,
+  "rotation_identified_by_this_audit": [],
+  "classification_notes": {
+    "frontend_current": "Supabase publishable client key, not a private server credential.",
+    "backend_current": "Findings at .env:2 (SUPABASE_SERVICE_ROLE_KEY) and .env:5 (GEMINI_API_KEY) are local, ignored and not tracked.",
+    "exit_codes": "Gitleaks exit 1 means candidate detections, not proof of a private credential leak."
+  },
+  "changes": {
+    "frontend": [
+      "cropguard/.gitignore: exclude Repomix and local configuration files"
+    ],
+    "backend": [
+      ".gitignore: exclude Repomix",
+      "repomix-output.xml: working-tree deletion, pending commit"
+    ],
+    "already_done_before_task": "Frontend Repomix was removed in commit 48fc76d; not counted as a change in this task.",
+    "unchanged": [
+      "Supabase client configuration",
+      "backend local .env",
+      "application source code",
+      "Git history and index"
+    ]
+  },
+  "limitations": [
+    "Only locally available reachable refs were analyzed; remotes were not fetched and dangling objects were not recovered.",
+    "No provider requests were made with detected values; validity, revocation and remote repository visibility are not asserted.",
+    "Pattern detection and exact matching cannot prove that no unknown or transformed secret exists.",
+    "Current scan excludes dependency and generated build caches. Expected ignored server credentials are not classified as published.",
+    "Supabase RLS and resource authorization require a separate review."
+  ]
+}
