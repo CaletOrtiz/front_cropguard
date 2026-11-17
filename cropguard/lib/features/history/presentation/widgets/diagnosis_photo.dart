@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:kroppi/core/network/api/fastapi_client.dart';
 import 'package:kroppi/core/network/supabase/supabase_client.dart'
     as app_supabase;
@@ -81,9 +82,9 @@ class _DiagnosisPhotoState extends State<DiagnosisPhoto> {
       future: imageUrl,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          debugPrint(
-            '[HISTORY IMAGE] Could not create signed URL: ${snapshot.error}',
-          );
+          if (kDebugMode) {
+            debugPrint('[HISTORY IMAGE] Could not create signed URL.');
+          }
           return _placeholder();
         }
         if (!snapshot.hasData) {
@@ -108,7 +109,9 @@ class _DiagnosisPhotoState extends State<DiagnosisPhoto> {
             height: widget.height,
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) {
-              debugPrint('[HISTORY IMAGE] Could not render photo: $error');
+              if (kDebugMode) {
+                debugPrint('[HISTORY IMAGE] Could not render photo.');
+              }
               return _placeholder();
             },
           ),

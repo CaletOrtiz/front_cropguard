@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "/home/lucifer/front_cropguard/cropguard/linux"
+  "cmake.sourceDirectory": "/home/lucifer/front_cropguard/cropguard/linux",
+  "java.configuration.updateBuildConfiguration": "interactive"
 }

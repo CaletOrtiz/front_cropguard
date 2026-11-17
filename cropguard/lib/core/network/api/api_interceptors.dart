@@ -19,15 +19,12 @@ class ApiAuthInterceptor extends Interceptor {
   }
 }
 
-/// Interceptor para registrar peticiones y respuestas en consola durante desarrollo.
+/// Solo metadatos en debug: las URLs, cuerpos y errores pueden contener secretos.
 class ApiLoggingInterceptor extends Interceptor {
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     if (kDebugMode) {
-      debugPrint('--> [FASTAPI REQUEST] ${options.method} ${options.uri}');
-      if (options.data != null && options.data is! FormData) {
-        debugPrint('    Data: ${options.data}');
-      }
+      debugPrint('--> [FASTAPI REQUEST] ${options.method}');
     }
     handler.next(options);
   }
@@ -35,9 +32,7 @@ class ApiLoggingInterceptor extends Interceptor {
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
     if (kDebugMode) {
-      debugPrint(
-        '<-- [FASTAPI RESPONSE ${response.statusCode}] ${response.requestOptions.uri}',
-      );
+      debugPrint('<-- [FASTAPI RESPONSE ${response.statusCode}]');
     }
     handler.next(response);
   }
@@ -45,13 +40,7 @@ class ApiLoggingInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
     if (kDebugMode) {
-      debugPrint(
-        '<-- [FASTAPI ERROR ${err.response?.statusCode}] ${err.requestOptions.uri}',
-      );
-      debugPrint('    Message: ${err.message}');
-      if (err.response?.data != null) {
-        debugPrint('    Response Body: ${err.response?.data}');
-      }
+      debugPrint('<-- [FASTAPI ERROR ${err.response?.statusCode}]');
     }
     handler.next(err);
   }
