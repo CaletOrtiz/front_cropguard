@@ -1,0 +1,111 @@
+{
+  "control": "M3 server resource authorization",
+  "date": "2026-11-16",
+  "result": "Cumple in reviewed API routes and implemented farm-owner policy",
+  "new_finding_ids": [],
+  "production_fixes": [],
+  "new_corrections_counted": 0,
+  "repositories": {
+    "frontend": {
+      "baseline_head": "2f60038",
+      "baseline_status": "clean"
+    },
+    "backend": {
+      "baseline_head": "0f18414",
+      "preexisting_changes": [
+        {
+          "path": ".gitignore",
+          "status": "M"
+        },
+        {
+          "path": "repomix-output.xml",
+          "status": "D"
+        }
+      ],
+      "new_files": [
+        "tests/test_resource_authorization.py",
+        "tests/run_authorization_checks.py"
+      ]
+    }
+  },
+  "authorization_policy": {
+    "identity": "JWT sub verified by usuario_actual",
+    "relation": "plot -> crop -> farm.owner_id == authenticated user id",
+    "author_metadata_grants_access": false,
+    "additional_collaboration_or_admin_grants_observed": false,
+    "database_client": "server service role; API checks required",
+    "unscoped_internal_id_reads": "used to resolve ownership before returning data or performing side effects"
+  },
+  "test_design": {
+    "real_components": [
+      "FastAPI routers",
+      "usuario_actual HS256 verification",
+      "services",
+      "repositories",
+      "cargar_lote",
+      "cargar_cultivo"
+    ],
+    "simulated_components": [
+      "database query I/O",
+      "object storage I/O",
+      "test issuer and signing key"
+    ],
+    "real_credentials_used": false,
+    "env_file_loaded": false,
+    "external_http_blocked": true,
+    "positive_resource_owners": 2,
+    "operations": 15,
+    "owner_cases": 30,
+    "other_authenticated_user_cases": 30,
+    "anonymous_cases": 30,
+    "additional_regressions": 7,
+    "expectations": {
+      "owner_reads_and_updates": 200,
+      "owner_creates": 201,
+      "owner_deletes": 204,
+      "foreign_owner": 404,
+      "no_bearer": 401
+    },
+    "denied_side_effects_checked": [
+      "database writes/deletes",
+      "object signing",
+      "object upload",
+      "object deletion"
+    ],
+    "owner_fields_from_client_ignored_or_not_updatable": true
+  },
+  "results": {
+    "baseline_suite": {
+      "passed": 44,
+      "warnings": 1,
+      "seconds": 1.41
+    },
+    "targeted_authorization": {
+      "passed": 97,
+      "warnings": 1,
+      "seconds": 12.85
+    },
+    "final_suite": {
+      "passed": 141,
+      "warnings": 1,
+      "seconds": 4.02
+    },
+    "existing_warning": "Starlette TestClient httpx deprecation",
+    "git_diff_check": "passed in both repositories"
+  },
+  "versions": {
+    "fastapi": "0.162.0",
+    "pytest": "9.2.0",
+    "PyJWT": "2.15.1",
+    "supabase_py": "2.33.0",
+    "httpx": "0.28.1"
+  },
+  "limitations": [
+    "Only plots, samples, reports and associated stats/timeline routes covered by the new matrix.",
+    "No remote database, storage, RLS deployment or real account tests.",
+    "No live JWKS requests; RS256 and ES256 not tested here.",
+    "Ownership policy is the current farm-owner policy; no additional collaboration permissions inferred.",
+    "H-04 form and image validation audit remains separate and incomplete."
+  ],
+  "secret_values_in_report": false
+}
