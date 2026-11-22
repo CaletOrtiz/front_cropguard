@@ -1,3 +1,4 @@
+import 'package:kroppi/features/profile/presentation/widgets/subscription_access.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -16,9 +17,14 @@ const _eventTypes = <String, String>{
 };
 
 class PlotTimelineScreen extends StatefulWidget {
-  const PlotTimelineScreen({super.key, required this.plotId});
+  const PlotTimelineScreen({
+    super.key,
+    required this.plotId,
+    required this.fullHistory,
+  });
 
   final String plotId;
+  final bool fullHistory;
 
   @override
   State<PlotTimelineScreen> createState() => _PlotTimelineScreenState();
@@ -28,7 +34,9 @@ class _PlotTimelineScreenState extends State<PlotTimelineScreen> {
   final _source = PlotModulesRemoteDataSource();
   final _scroll = ScrollController();
   final _items = <Map<String, dynamic>>[];
-  final _selectedTypes = _eventTypes.keys.toSet();
+  late final _selectedTypes = widget.fullHistory
+      ? _eventTypes.keys.toSet()
+      : {'sample'};
   String? _before;
   String? _error;
   bool _loading = false;
@@ -89,7 +97,9 @@ class _PlotTimelineScreenState extends State<PlotTimelineScreen> {
       if (!mounted) return;
       final page = (response['items'] as List).cast<Map<String, dynamic>>();
       setState(() {
-        _items.addAll(page.where((item) => !_items.any((old) => old['id'] == item['id'])));
+        _items.addAll(
+          page.where((item) => !_items.any((old) => old['id'] == item['id'])),
+        );
         _before = response['next_before'] as String?;
         _hasMore = _before != null;
         _loading = false;
@@ -123,6 +133,7 @@ class _PlotTimelineScreenState extends State<PlotTimelineScreen> {
     appBar: AppBar(title: const Text('Historial del lote')),
     body: Column(
       children: [
+        if (!widget.fullHistory) const ViewPlansButton(),
         SizedBox(
           height: 58,
           child: ListView(
@@ -130,14 +141,15 @@ class _PlotTimelineScreenState extends State<PlotTimelineScreen> {
             scrollDirection: Axis.horizontal,
             children: [
               for (final entry in _eventTypes.entries)
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: FilterChip(
-                    label: Text(entry.value),
-                    selected: _selectedTypes.contains(entry.key),
-                    onSelected: (value) => _toggle(entry.key, value),
+                if (widget.fullHistory || entry.key == 'sample')
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: FilterChip(
+                      label: Text(entry.value),
+                      selected: _selectedTypes.contains(entry.key),
+                      onSelected: (value) => _toggle(entry.key, value),
+                    ),
                   ),
-                ),
             ],
           ),
         ),
@@ -147,7 +159,10 @@ class _PlotTimelineScreenState extends State<PlotTimelineScreen> {
             child: Column(
               children: [
                 Text(_error!, textAlign: TextAlign.center),
-                TextButton(onPressed: () => _load(reset: true), child: const Text('Reintentar')),
+                TextButton(
+                  onPressed: () => _load(reset: true),
+                  child: const Text('Reintentar'),
+                ),
               ],
             ),
           )
@@ -161,7 +176,11 @@ class _PlotTimelineScreenState extends State<PlotTimelineScreen> {
                         SizedBox(height: 130),
                         Icon(Icons.history, size: 44),
                         SizedBox(height: 12),
-                        Center(child: Text('Aún no hay actividad en este lote. Empieza con un muestreo.')),
+                        Center(
+                          child: Text(
+                            'Aún no hay actividad en este lote. Empieza con un muestreo.',
+                          ),
+                        ),
                       ],
                     )
                   : ListView.builder(
@@ -178,27 +197,35 @@ class _PlotTimelineScreenState extends State<PlotTimelineScreen> {
                           );
                         }
                         final item = _items[index];
-                        final current = DateTime.parse(item['occurred_at'] as String).toLocal();
+                        final current = DateTime.parse(
+                          item['occurred_at'] as String,
+                        ).toLocal();
                         final previous = index == 0
                             ? null
-                            : DateTime.parse(_items[index - 1]['occurred_at'] as String).toLocal();
-                        final showMonth = previous == null ||
-                            previous.year != current.year || previous.month != current.month;
+                            : DateTime.parse(
+                                _items[index - 1]['occurred_at'] as String,
+                              ).toLocal();
+                        final showMonth =
+                            previous == null ||
+                            previous.year != current.year ||
+                            previous.month != current.month;
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             if (showMonth)
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(12, 14, 8, 6),
+                                padding: const EdgeInsets.fromLTRB(
+                                  12,
+                                  14,
+                                  8,
+                                  6,
+                                ),
                                 child: Text(
                                   DateFormat('MMMM y', 'es').format(current),
                                   style: Theme.of(context).textTheme.titleSmall,
                                 ),
                               ),
-                            _TimelineTile(
-                              item: item,
-                              onTap: () => _open(item),
-                            ),
+                            _TimelineTile(item: item, onTap: () => _open(item)),
                           ],
                         );
                       },
@@ -213,7 +240,9 @@ class _PlotTimelineScreenState extends State<PlotTimelineScreen> {
     final ref = item['ref'] as Map<String, dynamic>? ?? {};
     switch (item['type']) {
       case 'care':
-        context.push(AppRoutes.careDetailPath(widget.plotId, ref['id'] as String));
+        context.push(
+          AppRoutes.careDetailPath(widget.plotId, ref['id'] as String),
+        );
         break;
       case 'report':
         context.push(
@@ -226,7 +255,9 @@ class _PlotTimelineScreenState extends State<PlotTimelineScreen> {
         break;
       case 'diagnosis':
         final ids = (item['data']?['diagnosis_ids'] as List?) ?? const [];
-        if (ids.isNotEmpty) context.push(AppRoutes.diagnosisDetailPath(ids.first.toString()));
+        if (ids.isNotEmpty) {
+          context.push(AppRoutes.diagnosisDetailPath(ids.first.toString()));
+        }
         break;
       case 'harvest':
         context.push(
@@ -256,7 +287,10 @@ class _PlotTimelineScreenState extends State<PlotTimelineScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(item['title'] as String? ?? 'Detalle', style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                item['title'] as String? ?? 'Detalle',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
               if (item['subtitle'] != null) ...[
                 const SizedBox(height: 8),
                 Text(item['subtitle'].toString()),
@@ -266,7 +300,9 @@ class _PlotTimelineScreenState extends State<PlotTimelineScreen> {
                     !{'diagnosis_ids', 'disease_code'}.contains(entry.key))
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
-                    child: Text('${entry.key.replaceAll('_', ' ')}: ${entry.value}'),
+                    child: Text(
+                      '${entry.key.replaceAll('_', ' ')}: ${entry.value}',
+                    ),
                   ),
             ],
           ),
@@ -298,7 +334,10 @@ class _TimelineTile extends StatelessWidget {
               width: 58,
               child: Padding(
                 padding: const EdgeInsets.only(top: 14),
-                child: Text(DateFormat('d MMM', 'es').format(occurred), style: Theme.of(context).textTheme.labelSmall),
+                child: Text(
+                  DateFormat('d MMM', 'es').format(occurred),
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
               ),
             ),
             SizedBox(
@@ -312,10 +351,17 @@ class _TimelineTile extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: _color(type),
                       shape: BoxShape.circle,
-                      border: severity == 'high' ? Border.all(color: Colors.red, width: 3) : null,
+                      border: severity == 'high'
+                          ? Border.all(color: Colors.red, width: 3)
+                          : null,
                     ),
                   ),
-                  Expanded(child: Container(width: 2, color: Theme.of(context).dividerColor)),
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      color: Theme.of(context).dividerColor,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -324,15 +370,23 @@ class _TimelineTile extends StatelessWidget {
                 margin: const EdgeInsets.only(bottom: 8, right: 6),
                 child: ListTile(
                   leading: Icon(_icon(type), color: _color(type)),
-                  title: Text(item['title'] as String? ?? _eventTypes[type] ?? 'Actividad'),
+                  title: Text(
+                    item['title'] as String? ??
+                        _eventTypes[type] ??
+                        'Actividad',
+                  ),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (item['subtitle'] != null) Text(item['subtitle'].toString()),
+                      if (item['subtitle'] != null)
+                        Text(item['subtitle'].toString()),
                       if (data['first_detection'] == true)
                         const Padding(
                           padding: EdgeInsets.only(top: 4),
-                          child: Text('Primera detección', style: TextStyle(fontWeight: FontWeight.w700)),
+                          child: Text(
+                            'Primera detección',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
                         ),
                     ],
                   ),

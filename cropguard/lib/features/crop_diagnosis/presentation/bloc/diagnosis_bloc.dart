@@ -22,6 +22,7 @@ class DiagnosisBloc extends Bloc<DiagnosisEvent, DiagnosisState> {
     AnalyzeImageSubmittedEvent event,
     Emitter<DiagnosisState> emit,
   ) async {
+    if (state is DiagnosisLoadingState) return;
     emit(DiagnosisLoadingState());
 
     String? sampleId;

@@ -1,3 +1,6 @@
+import 'package:kroppi/features/profile/domain/entities/subscription_access.dart';
+import 'package:kroppi/features/profile/presentation/widgets/subscription_access.dart';
+import 'package:kroppi/core/network/api/api_error_message.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -56,7 +59,8 @@ class _FarmCropFormScreenState extends State<FarmCropFormScreen> {
       FarmCrop? crop;
       if (_isEditing) crop = await source.getFarmCrop(widget.cropId!);
       if (!mounted) return;
-      if (crop != null && !types.any((type) => type['id'] == crop!.cropTypeId)) {
+      if (crop != null &&
+          !types.any((type) => type['id'] == crop!.cropTypeId)) {
         types.add({'id': crop.cropTypeId, 'name': crop.typeName});
       }
       if (types.isEmpty) {
@@ -64,7 +68,9 @@ class _FarmCropFormScreenState extends State<FarmCropFormScreen> {
       }
       setState(() {
         _types = types;
-        _typeId = crop?.cropTypeId ?? (types.length == 1 ? types.first['id'] as String : null);
+        _typeId =
+            crop?.cropTypeId ??
+            (types.length == 1 ? types.first['id'] as String : null);
         _name.text = crop?.name ?? '';
         _plantedAt = crop?.plantedAt;
         _expectedHarvestAt = crop?.expectedHarvestAt;
@@ -115,6 +121,8 @@ class _FarmCropFormScreenState extends State<FarmCropFormScreen> {
     }
     setState(() => _saving = true);
     try {
+      if (!_isEditing) await checkCreationQuota(context, PlanResource.crops);
+      if (!mounted) return;
       final source = context.read<FarmRemoteDataSource>();
       final name = _name.text.trim();
       if (_isEditing) {
@@ -140,7 +148,7 @@ class _FarmCropFormScreenState extends State<FarmCropFormScreen> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _saving = false);
-      _showMessage('No se pudo guardar el cultivo: $error');
+      _showMessage('No se pudo guardar el cultivo: ${apiErrorMessage(error)}');
     }
   }
 
@@ -179,8 +187,9 @@ class _FarmCropFormScreenState extends State<FarmCropFormScreen> {
                       label: 'Tipo de cultivo',
                       hint: 'Selecciona uno',
                       value: _typeId,
-                      validator: (value) =>
-                          value == null ? 'Selecciona el tipo de cultivo.' : null,
+                      validator: (value) => value == null
+                          ? 'Selecciona el tipo de cultivo.'
+                          : null,
                       onChanged: _saving
                           ? null
                           : (value) => setState(() => _typeId = value),
@@ -271,7 +280,9 @@ class _DateField extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  value == null ? 'Seleccionar fecha' : DateFormatter.short(value!),
+                  value == null
+                      ? 'Seleccionar fecha'
+                      : DateFormatter.short(value!),
                 ),
               ),
               if (value != null)

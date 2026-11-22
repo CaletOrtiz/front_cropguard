@@ -1,3 +1,5 @@
+import 'package:kroppi/features/profile/presentation/cubit/subscription_cubit.dart';
+import 'package:kroppi/features/profile/presentation/widgets/subscription_access.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -26,6 +28,8 @@ class PlotDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final access = context.watch<SubscriptionCubit>().state.access;
+    final premium = access?.premiumFeatures == true;
     return BlocBuilder<PlotDetailCubit, PlotDetailState>(
       builder: (context, state) {
         final d = state.detail;
@@ -81,70 +85,108 @@ class PlotDetailScreen extends StatelessWidget {
                           spacing: 8,
                           runSpacing: 8,
                           children: [
+                            if (access?.premiumFeatures == false)
+                              _ModuleLink(
+                                label: 'Registrar cuidado',
+                                icon: Icons.medication_outlined,
+                                onTap: () =>
+                                    context.push(AppRoutes.careNewPath(plotId)),
+                              ),
                             _ModuleLink(
                               icon: Icons.medication_outlined,
-                              label: 'Cuidados',
-                              onTap: () => context.push(AppRoutes.careListPath(plotId)),
+                              label: premium
+                                  ? 'Cuidados'
+                                  : 'Historial de cuidados · Premium',
+                              onTap: () =>
+                                  context.push(AppRoutes.careListPath(plotId)),
                             ),
+                            if (access?.premiumFeatures == false)
+                              _ModuleLink(
+                                label: 'Registrar cosecha',
+                                icon: Icons.agriculture,
+                                onTap: () => context.push(
+                                  AppRoutes.harvestNewPath(plotId),
+                                ),
+                              ),
                             _ModuleLink(
                               icon: Icons.agriculture,
-                              label: 'Cosechas',
-                              onTap: () => context.push(AppRoutes.harvestsPath(plotId)),
+                              label: premium
+                                  ? 'Cosechas'
+                                  : 'Historial de cosechas · Premium',
+                              onTap: () =>
+                                  context.push(AppRoutes.harvestsPath(plotId)),
                             ),
                             _ModuleLink(
                               icon: Icons.trending_down,
-                              label: 'Pérdida estimada',
-                              onTap: () => context.push(AppRoutes.lossPath(plotId)),
+                              label: premium
+                                  ? 'Pérdida estimada'
+                                  : 'Pérdida estimada · Premium',
+                              onTap: () =>
+                                  context.push(AppRoutes.lossPath(plotId)),
                             ),
                             _ModuleLink(
                               icon: Icons.insights_outlined,
-                              label: 'Estadísticas',
-                              onTap: () => context.push(AppRoutes.plotStatsPath(plotId)),
+                              label: premium
+                                  ? 'Estadísticas'
+                                  : 'Estadísticas · Premium',
+                              onTap: () =>
+                                  context.push(AppRoutes.plotStatsPath(plotId)),
                             ),
                             _ModuleLink(
                               icon: Icons.history,
                               label: 'Historial',
-                              onTap: () => context.push(AppRoutes.plotTimelinePath(plotId)),
+                              onTap: () => context.push(
+                                AppRoutes.plotTimelinePath(plotId),
+                              ),
                             ),
                             _ModuleLink(
                               icon: Icons.picture_as_pdf_outlined,
-                              label: 'Informes',
-                              onTap: () => context.push(AppRoutes.reportsPath(plotId)),
+                              label: premium
+                                  ? 'Informes'
+                                  : 'Informes · Premium',
+                              onTap: () =>
+                                  context.push(AppRoutes.reportsPath(plotId)),
                             ),
                           ],
                         ),
                         const SizedBox(height: 28),
-                        const Text(
-                          'Evolución de la incidencia',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Alerta desde ${d.alertPct.toStringAsFixed(0)} % · '
-                          'peligro desde ${d.dangerPct.toStringAsFixed(0)} %',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        if (state.samples.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 24),
-                            child: Text(
-                              'Aún no hay muestreos. Haz el primero para saber qué tan sano está este lote.',
-                              style: TextStyle(color: AppColors.textSecondary),
+                        if (access?.premiumFeatures == false)
+                          const ViewPlansButton(),
+                        if (premium) ...[
+                          const Text(
+                            'Evolución de la incidencia',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
                             ),
-                          )
-                        else
-                          IncidenceChart(
-                            samples: state.samples,
-                            alertPct: d.alertPct,
-                            dangerPct: d.dangerPct,
                           ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Alerta desde ${d.alertPct.toStringAsFixed(0)} % · '
+                            'peligro desde ${d.dangerPct.toStringAsFixed(0)} %',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          if (state.samples.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 24),
+                              child: Text(
+                                'Aún no hay muestreos. Haz el primero para saber qué tan sano está este lote.',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            )
+                          else
+                            IncidenceChart(
+                              samples: state.samples,
+                              alertPct: d.alertPct,
+                              dangerPct: d.dangerPct,
+                            ),
+                        ],
                       ],
                     ),
                   ),

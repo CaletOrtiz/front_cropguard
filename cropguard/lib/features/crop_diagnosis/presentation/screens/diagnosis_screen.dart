@@ -1,3 +1,5 @@
+import 'package:kroppi/features/profile/presentation/cubit/subscription_cubit.dart';
+import 'package:kroppi/features/profile/presentation/widgets/subscription_access.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
@@ -39,6 +41,7 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
   void initState() {
     super.initState();
     _loadPlots();
+    context.read<SubscriptionCubit>().refresh();
   }
 
   Future<void> _loadPlots() async {
@@ -103,6 +106,11 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
                         .pickImageFromCamera();
 
                     if (image != null && context.mounted) {
+                      final subscription = context.read<SubscriptionCubit>();
+                      await subscription.refresh();
+                      if (!context.mounted || !subscription.state.canDiagnose) {
+                        return;
+                      }
                       context.read<DiagnosisBloc>().add(
                         AnalyzeImageSubmittedEvent(
                           imageFile: image,
@@ -122,6 +130,11 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
                         .pickImageFromGallery();
 
                     if (image != null && context.mounted) {
+                      final subscription = context.read<SubscriptionCubit>();
+                      await subscription.refresh();
+                      if (!context.mounted || !subscription.state.canDiagnose) {
+                        return;
+                      }
                       context.read<DiagnosisBloc>().add(
                         AnalyzeImageSubmittedEvent(
                           imageFile: image,
@@ -142,20 +155,35 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Diagnóstico de Cultivo')),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: _buildPlotPicker(),
-          ),
-          Expanded(child: Center(child: _buildResult())),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showImageSourceModal(context),
-        child: const Icon(Icons.add_a_photo),
+    final canDiagnose = context.watch<SubscriptionCubit>().state.canDiagnose;
+    final loading =
+        context.watch<DiagnosisBloc>().state is DiagnosisLoadingState;
+    return BlocListener<DiagnosisBloc, DiagnosisState>(
+      listenWhen: (_, state) =>
+          state is DiagnosisSuccessState || state is DiagnosisErrorState,
+      listener: (context, _) =>
+          context.read<SubscriptionCubit>().refreshAfterChange(),
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Diagnóstico de Cultivo')),
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: _buildPlotPicker(),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: DiagnosisQuotaNotice(),
+            ),
+            Expanded(child: Center(child: _buildResult())),
+          ],
+        ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: canDiagnose && !loading
+              ? () => _showImageSourceModal(context)
+              : null,
+          child: const Icon(Icons.add_a_photo),
+        ),
       ),
     );
   }

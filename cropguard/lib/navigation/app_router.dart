@@ -1,3 +1,8 @@
+import 'package:kroppi/features/history/domain/usecases/get_diagnosis_by_id_usecase.dart';
+import 'package:flutter/material.dart';
+import 'package:kroppi/features/profile/domain/entities/subscription_access.dart';
+import 'package:kroppi/features/profile/presentation/cubit/subscription_cubit.dart';
+import 'package:kroppi/features/profile/presentation/widgets/subscription_access.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kroppi/core/network/supabase/supabase_client.dart'
@@ -85,6 +90,7 @@ class AppRouter {
   AppRouter._();
 
   static final GoRouter router = GoRouter(
+    observers: [SubscriptionNavigatorObserver()],
     initialLocation: AppRoutes.splash,
     routes: [
       GoRoute(
@@ -126,18 +132,27 @@ class AppRouter {
             routes: [
               GoRoute(
                 path: AppRoutes.history,
-                builder: (context, state) => BlocProvider(
-                  create: (_) => HistoryCubit(
-                    GetDiagnosisHistoryUsecase(
-                      HistoryRepositoryImpl(
-                        HistoryRemoteDataSource(
-                          app_supabase.SupabaseClient.client,
+                builder: (context, state) {
+                  final access = context
+                      .watch<SubscriptionCubit>()
+                      .state
+                      .access;
+                  return BlocProvider(
+                    key: ValueKey((access?.premiumFeatures, access?.startsAt)),
+                    create: (_) => HistoryCubit(
+                      GetDiagnosisHistoryUsecase(
+                        HistoryRepositoryImpl(
+                          HistoryRemoteDataSource(
+                            app_supabase.SupabaseClient.client,
+                          ),
                         ),
                       ),
+                    )..load(),
+                    child: HistoryScreen(
+                      showFullHistory: access?.premiumFeatures != false,
                     ),
-                  )..load(),
-                  child: const HistoryScreen(),
-                ),
+                  );
+                },
               ),
             ],
           ),
@@ -194,7 +209,10 @@ class AppRouter {
       // --- Cultivos y lotes del usuario ---
       GoRoute(
         path: AppRoutes.farmNew,
-        builder: (context, state) => const FarmFormScreen(),
+        builder: (context, state) => SubscriptionGate(
+          resource: PlanResource.farms,
+          builder: (_) => const FarmFormScreen(),
+        ),
       ),
       GoRoute(
         path: AppRoutes.farmEdit,
@@ -203,8 +221,11 @@ class AppRouter {
       ),
       GoRoute(
         path: AppRoutes.farmCropNew,
-        builder: (context, state) =>
-            FarmCropFormScreen(farmId: state.pathParameters['farmId']!),
+        builder: (context, state) => SubscriptionGate(
+          resource: PlanResource.crops,
+          builder: (_) =>
+              FarmCropFormScreen(farmId: state.pathParameters['farmId']!),
+        ),
       ),
       GoRoute(
         path: AppRoutes.farmCropDetail,
@@ -222,10 +243,13 @@ class AppRouter {
       ),
       GoRoute(
         path: AppRoutes.farmPlotNew,
-        builder: (context, state) => PlotFormScreen(
-          cropId: state.pathParameters['cropId']!,
-          useSupabase: true,
-          farmId: state.pathParameters['farmId']!,
+        builder: (context, state) => SubscriptionGate(
+          resource: PlanResource.plots,
+          builder: (_) => PlotFormScreen(
+            cropId: state.pathParameters['cropId']!,
+            useSupabase: true,
+            farmId: state.pathParameters['farmId']!,
+          ),
         ),
       ),
       GoRoute(
@@ -257,7 +281,10 @@ class AppRouter {
       ),
       GoRoute(
         path: AppRoutes.cropNew,
-        builder: (context, state) => const CropFormScreen(),
+        builder: (context, state) => SubscriptionGate(
+          resource: PlanResource.crops,
+          builder: (_) => const CropFormScreen(),
+        ),
       ),
       GoRoute(
         path: AppRoutes.cropDetail,
@@ -267,8 +294,11 @@ class AppRouter {
       ),
       GoRoute(
         path: AppRoutes.plotNew,
-        builder: (context, state) =>
-            PlotFormScreen(cropId: state.pathParameters['cropId']!),
+        builder: (context, state) => SubscriptionGate(
+          resource: PlanResource.plots,
+          builder: (_) =>
+              PlotFormScreen(cropId: state.pathParameters['cropId']!),
+        ),
       ),
       // Las rutas fijas de /plots van antes de /plots/:plotId: GoRouter usa la
       // primera coincidencia y "/plots/danger" se tomaba como un plotId.
@@ -301,14 +331,23 @@ class AppRouter {
       // Cosechas y pérdidas: "/new" antes que "/:id" (primera coincidencia).
       GoRoute(
         path: AppRoutes.harvests,
-        builder: (context, state) {
-          final plotId = state.pathParameters['plotId']!;
-          return BlocProvider(
-            create: (context) =>
-                HarvestListCubit(context.read<HarvestRepository>(), plotId),
-            child: HarvestListScreen(plotId: plotId),
-          );
-        },
+        builder: (context, state) => SubscriptionGate(
+          premium: true,
+          freeAction: FilledButton(
+            onPressed: () => context.push(
+              AppRoutes.harvestNewPath(state.pathParameters['plotId']!),
+            ),
+            child: const Text('Registrar cosecha'),
+          ),
+          builder: (_) {
+            final plotId = state.pathParameters['plotId']!;
+            return BlocProvider(
+              create: (context) =>
+                  HarvestListCubit(context.read<HarvestRepository>(), plotId),
+              child: HarvestListScreen(plotId: plotId),
+            );
+          },
+        ),
       ),
       GoRoute(
         path: AppRoutes.harvestNew,
@@ -339,44 +378,62 @@ class AppRouter {
       ),
       GoRoute(
         path: AppRoutes.loss,
-        builder: (context, state) {
-          final plotId = state.pathParameters['plotId']!;
-          return BlocProvider(
-            create: (context) =>
-                LossListCubit(context.read<LossRepository>(), plotId),
-            child: LossListScreen(plotId: plotId),
-          );
-        },
+        builder: (context, state) => SubscriptionGate(
+          premium: true,
+          builder: (_) {
+            final plotId = state.pathParameters['plotId']!;
+            return BlocProvider(
+              create: (context) =>
+                  LossListCubit(context.read<LossRepository>(), plotId),
+              child: LossListScreen(plotId: plotId),
+            );
+          },
+        ),
       ),
       GoRoute(
         path: AppRoutes.lossNew,
-        builder: (context, state) {
-          final plotId = state.pathParameters['plotId']!;
-          return BlocProvider(
-            create: (context) =>
-                LossFormCubit(context.read<LossRepository>(), plotId: plotId),
-            child: LossFormScreen(plotId: plotId),
-          );
-        },
+        builder: (context, state) => SubscriptionGate(
+          premium: true,
+          builder: (_) {
+            final plotId = state.pathParameters['plotId']!;
+            return BlocProvider(
+              create: (context) =>
+                  LossFormCubit(context.read<LossRepository>(), plotId: plotId),
+              child: LossFormScreen(plotId: plotId),
+            );
+          },
+        ),
       ),
       GoRoute(
         path: AppRoutes.lossDetail,
-        builder: (context, state) {
-          final plotId = state.pathParameters['plotId']!;
-          return BlocProvider(
-            create: (context) => LossFormCubit(
-              context.read<LossRepository>(),
-              plotId: plotId,
-              estimationId: state.pathParameters['estimationId'],
-            ),
-            child: LossFormScreen(plotId: plotId),
-          );
-        },
+        builder: (context, state) => SubscriptionGate(
+          premium: true,
+          builder: (_) {
+            final plotId = state.pathParameters['plotId']!;
+            return BlocProvider(
+              create: (context) => LossFormCubit(
+                context.read<LossRepository>(),
+                plotId: plotId,
+                estimationId: state.pathParameters['estimationId'],
+              ),
+              child: LossFormScreen(plotId: plotId),
+            );
+          },
+        ),
       ),
       GoRoute(
         path: AppRoutes.careList,
-        builder: (context, state) =>
-            CareListScreen(plotId: state.pathParameters['plotId']!),
+        builder: (context, state) => SubscriptionGate(
+          premium: true,
+          freeAction: FilledButton(
+            onPressed: () => context.push(
+              AppRoutes.careNewPath(state.pathParameters['plotId']!),
+            ),
+            child: const Text('Registrar actividad de cuidado'),
+          ),
+          builder: (_) =>
+              CareListScreen(plotId: state.pathParameters['plotId']!),
+        ),
       ),
       GoRoute(
         path: AppRoutes.careNew,
@@ -399,25 +456,39 @@ class AppRouter {
       ),
       GoRoute(
         path: AppRoutes.plotStats,
-        builder: (context, state) =>
-            PlotStatsScreen(plotId: state.pathParameters['plotId']!),
+        builder: (context, state) => SubscriptionGate(
+          premium: true,
+          builder: (_) =>
+              PlotStatsScreen(plotId: state.pathParameters['plotId']!),
+        ),
       ),
       GoRoute(
         path: AppRoutes.plotTimeline,
-        builder: (context, state) =>
-            PlotTimelineScreen(plotId: state.pathParameters['plotId']!),
+        builder: (context, state) => SubscriptionGate(
+          builder: (access) => PlotTimelineScreen(
+            key: ValueKey(access.premiumFeatures),
+            plotId: state.pathParameters['plotId']!,
+            fullHistory: access.premiumFeatures,
+          ),
+        ),
       ),
       GoRoute(
         path: AppRoutes.reports,
-        builder: (context, state) => ReportsListScreen(
-          plotId: state.pathParameters['plotId']!,
-          initialReportId: state.extra as String?,
+        builder: (context, state) => SubscriptionGate(
+          premium: true,
+          builder: (_) => ReportsListScreen(
+            plotId: state.pathParameters['plotId']!,
+            initialReportId: state.extra as String?,
+          ),
         ),
       ),
       GoRoute(
         path: AppRoutes.reportNew,
-        builder: (context, state) =>
-            ReportSetupScreen(plotId: state.pathParameters['plotId']!),
+        builder: (context, state) => SubscriptionGate(
+          premium: true,
+          builder: (_) =>
+              ReportSetupScreen(plotId: state.pathParameters['plotId']!),
+        ),
       ),
       GoRoute(
         path: AppRoutes.sampling,
@@ -473,19 +544,10 @@ class AppRouter {
       ),
       GoRoute(
         path: AppRoutes.plans,
-        builder: (context, state) {
-          final authState = context.read<AuthBloc>().state;
-          return BlocProvider(
-            create: (context) => PlanCubit(
-              getCurrentUser: context.read(),
-              createPremiumCheckout: context.read(),
-              initialUser: authState is AuthAuthenticated
-                  ? authState.user
-                  : null,
-            ),
-            child: const PlansScreen(),
-          );
-        },
+        builder: (context, state) => BlocProvider(
+          create: (context) => PlanCubit(createPremiumCheckout: context.read()),
+          child: const PlansScreen(),
+        ),
       ),
       GoRoute(
         path: AppRoutes.notifications,
@@ -499,9 +561,36 @@ class AppRouter {
       ),
       GoRoute(
         path: AppRoutes.diagnosisDetail,
-        builder: (context, state) => DiagnosisDetailScreen(
-          diagnosisId: state.pathParameters['diagnosisId']!,
-          record: state.extra as DiagnosisRecord?,
+        builder: (context, state) => SubscriptionGate(
+          builder: (access) {
+            final record = state.extra as DiagnosisRecord?;
+            if (record != null &&
+                !access.allowsDiagnosisHistoryAt(record.date)) {
+              return Scaffold(
+                appBar: AppBar(title: const Text('Resultado del diagnóstico')),
+                body: const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'El historial de períodos anteriores requiere Premium.',
+                      ),
+                      ViewPlansButton(),
+                    ],
+                  ),
+                ),
+              );
+            }
+            return DiagnosisDetailScreen(
+              diagnosisId: state.pathParameters['diagnosisId']!,
+              key: ValueKey(access.premiumFeatures),
+              loadRecord: GetDiagnosisByIdUsecase(
+                HistoryRepositoryImpl(
+                  HistoryRemoteDataSource(app_supabase.SupabaseClient.client),
+                ),
+              ).call,
+            );
+          },
         ),
       ),
     ],

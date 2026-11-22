@@ -1,3 +1,6 @@
+import 'package:kroppi/features/profile/domain/entities/subscription_access.dart';
+import 'package:kroppi/features/profile/presentation/widgets/subscription_access.dart';
+import 'package:kroppi/core/network/api/api_error_message.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -88,6 +91,8 @@ class _FarmFormScreenState extends State<FarmFormScreen> {
     setState(() => _saving = true);
 
     try {
+      if (!_isEditing) await checkCreationQuota(context, PlanResource.farms);
+      if (!mounted) return;
       final source = context.read<FarmRemoteDataSource>();
       final name = _name.text.trim();
       final areaHa = _parseNumber(_areaHa.text)!;
@@ -117,7 +122,11 @@ class _FarmFormScreenState extends State<FarmFormScreen> {
       setState(() => _saving = false);
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('No se pudo guardar: $error')));
+        ..showSnackBar(
+          SnackBar(
+            content: Text('No se pudo guardar: ${apiErrorMessage(error)}'),
+          ),
+        );
     }
   }
 

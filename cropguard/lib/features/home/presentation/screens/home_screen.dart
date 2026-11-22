@@ -1,3 +1,4 @@
+import 'package:kroppi/features/profile/presentation/cubit/subscription_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -21,6 +22,7 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final access = context.watch<SubscriptionCubit>().state.access;
     return BlocBuilder<HomeCubit, HomeState>(
       builder: (context, homeState) {
         return BlocBuilder<AuthBloc, AuthState>(
@@ -62,7 +64,15 @@ class HomeScreen extends StatelessWidget {
                         else if (dashboard != null)
                           _DashboardContent(
                             dashboard: dashboard,
-                            recentDiagnoses: homeState.recentDiagnoses,
+                            recentDiagnoses: homeState.recentDiagnoses
+                                .where(
+                                  (record) =>
+                                      access?.allowsDiagnosisHistoryAt(
+                                        record.date,
+                                      ) ==
+                                      true,
+                                )
+                                .toList(),
                             recentDiagnosesStatus:
                                 homeState.recentDiagnosesStatus,
                             recentDiagnosesMessage:

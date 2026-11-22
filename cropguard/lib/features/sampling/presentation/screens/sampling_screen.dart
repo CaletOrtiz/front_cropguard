@@ -1,3 +1,5 @@
+import 'package:kroppi/features/profile/presentation/cubit/subscription_cubit.dart';
+import 'package:kroppi/features/profile/presentation/widgets/subscription_access.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -41,6 +43,12 @@ class _SamplingScreenState extends State<SamplingScreen> {
   bool _started = false;
 
   @override
+  void initState() {
+    super.initState();
+    context.read<SubscriptionCubit>().refresh();
+  }
+
+  @override
   void dispose() {
     _plantCountController.dispose();
     super.dispose();
@@ -59,12 +67,20 @@ class _SamplingScreenState extends State<SamplingScreen> {
         ? await picker.pickImageFromCamera()
         : await picker.pickImageFromGallery();
     if (file != null && context.mounted) {
-      context.read<SamplingCubit>().scan(file);
+      final subscription = context.read<SubscriptionCubit>();
+      await subscription.refresh();
+      if (!context.mounted || !subscription.state.canDiagnose) return;
+      try {
+        await context.read<SamplingCubit>().scan(file);
+      } finally {
+        await subscription.refreshAfterChange();
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final canDiagnose = context.watch<SubscriptionCubit>().state.canDiagnose;
     if (!_started) {
       return BlocBuilder<SamplingCubit, SamplingState>(
         builder: (context, _) {
@@ -113,8 +129,9 @@ class _SamplingScreenState extends State<SamplingScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  const DiagnosisQuotaNotice(),
                   FilledButton.icon(
-                    onPressed: () => _start(cubit),
+                    onPressed: canDiagnose ? () => _start(cubit) : null,
                     icon: const Icon(Icons.play_arrow_rounded),
                     label: const Text('Comenzar muestreo'),
                   ),
@@ -237,6 +254,7 @@ class _SamplingScreenState extends State<SamplingScreen> {
                           ),
                   ),
                   const SizedBox(height: 12),
+                  const DiagnosisQuotaNotice(),
                   if (scanning || closing)
                     Column(
                       children: [
@@ -249,7 +267,7 @@ class _SamplingScreenState extends State<SamplingScreen> {
                         ),
                       ],
                     )
-                  else if (hasRoom) ...[
+                  else if (hasRoom && canDiagnose) ...[
                     GestureDetector(
                       onTap: () => _capture(context, camera: true),
                       child: Container(
@@ -271,7 +289,7 @@ class _SamplingScreenState extends State<SamplingScreen> {
                       onPressed: () => _capture(context, camera: false),
                       child: const Text('Elegir de la galería'),
                     ),
-                  ] else
+                  ] else if (!hasRoom)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Text(

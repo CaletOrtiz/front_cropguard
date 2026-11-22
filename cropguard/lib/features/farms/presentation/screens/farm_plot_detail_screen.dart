@@ -1,3 +1,4 @@
+import 'package:kroppi/features/profile/presentation/cubit/subscription_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -81,6 +82,8 @@ class _FarmPlotDetailScreenState extends State<FarmPlotDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final access = context.watch<SubscriptionCubit>().state.access;
+    final premium = access?.premiumFeatures == true;
     final plot = _plot;
     return Scaffold(
       appBar: AppBar(
@@ -190,26 +193,50 @@ class _FarmPlotDetailScreenState extends State<FarmPlotDetailScreen> {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
+                      if (access?.premiumFeatures == false)
+                        _ModuleButton(
+                          label: 'Registrar cuidado',
+                          icon: Icons.medication_outlined,
+                          onTap: () => context.push(
+                            AppRoutes.careNewPath(widget.plotId),
+                          ),
+                        ),
                       _ModuleButton(
-                        label: 'Cuidados',
+                        label: premium
+                            ? 'Cuidados'
+                            : 'Historial de cuidados · Premium',
                         icon: Icons.medication_outlined,
                         onTap: () =>
                             context.push(AppRoutes.careListPath(widget.plotId)),
                       ),
+                      if (access?.premiumFeatures == false)
+                        _ModuleButton(
+                          label: 'Registrar cosecha',
+                          icon: Icons.agriculture,
+                          onTap: () => context.push(
+                            AppRoutes.harvestNewPath(widget.plotId),
+                          ),
+                        ),
                       _ModuleButton(
-                        label: 'Cosechas',
+                        label: premium
+                            ? 'Cosechas'
+                            : 'Historial de cosechas · Premium',
                         icon: Icons.agriculture,
                         onTap: () =>
                             context.push(AppRoutes.harvestsPath(widget.plotId)),
                       ),
                       _ModuleButton(
-                        label: 'Pérdida estimada',
+                        label: premium
+                            ? 'Pérdida estimada'
+                            : 'Pérdida estimada · Premium',
                         icon: Icons.trending_down,
                         onTap: () =>
                             context.push(AppRoutes.lossPath(widget.plotId)),
                       ),
                       _ModuleButton(
-                        label: 'Estadísticas',
+                        label: premium
+                            ? 'Estadísticas'
+                            : 'Estadísticas · Premium',
                         icon: Icons.insights_outlined,
                         onTap: () => context.push(
                           AppRoutes.plotStatsPath(widget.plotId),
@@ -223,7 +250,7 @@ class _FarmPlotDetailScreenState extends State<FarmPlotDetailScreen> {
                         ),
                       ),
                       _ModuleButton(
-                        label: 'Informes',
+                        label: premium ? 'Informes' : 'Informes · Premium',
                         icon: Icons.picture_as_pdf_outlined,
                         onTap: () =>
                             context.push(AppRoutes.reportsPath(widget.plotId)),

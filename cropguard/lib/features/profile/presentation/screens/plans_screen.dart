@@ -1,11 +1,11 @@
+import 'package:kroppi/features/profile/domain/entities/subscription_access.dart';
+import 'package:kroppi/features/profile/presentation/cubit/subscription_cubit.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:kroppi/core/constants/app_colors.dart';
-import 'package:kroppi/features/auth/presentation/bloc/auth_bloc.dart';
-import 'package:kroppi/features/auth/presentation/bloc/auth_event.dart';
 import 'package:kroppi/features/profile/domain/entities/plan_catalog.dart';
 import 'package:kroppi/features/profile/presentation/cubit/plan_cubit.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -25,7 +25,7 @@ class _PlansScreenState extends State<PlansScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    context.read<PlanCubit>().refreshProfile();
+    context.read<SubscriptionCubit>().refresh();
   }
 
   @override
@@ -38,7 +38,7 @@ class _PlansScreenState extends State<PlansScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && _awaitingCheckoutReturn) {
       _awaitingCheckoutReturn = false;
-      unawaited(context.read<PlanCubit>().refreshProfile());
+      unawaited(context.read<SubscriptionCubit>().refresh());
     }
   }
 
@@ -85,22 +85,16 @@ class _PlansScreenState extends State<PlansScreen> with WidgetsBindingObserver {
               current.errorMessage != null,
           listener: (context, state) => _showMessage(state.errorMessage!),
         ),
-        BlocListener<PlanCubit, PlanState>(
-          listenWhen: (previous, current) =>
-              previous.user != current.user && current.user != null,
-          listener: (context, state) {
-            context.read<AuthBloc>().add(AuthUserUpdated(state.user!));
-          },
-        ),
       ],
       child: Scaffold(
         appBar: AppBar(title: const Text('Planes')),
         body: SafeArea(
           child: BlocBuilder<PlanCubit, PlanState>(
             builder: (context, state) {
-              final user = state.user;
-              if (user == null) {
-                if (state.errorMessage == null) {
+              final subscription = context.watch<SubscriptionCubit>().state;
+              final access = subscription.access;
+              if (access == null) {
+                if (subscription.loading) {
                   return const Center(child: CircularProgressIndicator());
                 }
                 return Center(
@@ -109,13 +103,16 @@ class _PlansScreenState extends State<PlansScreen> with WidgetsBindingObserver {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text('No se pudo consultar tu plan.'),
+                        Text(
+                          subscription.error ?? 'No se pudo consultar tu plan.',
+                          textAlign: TextAlign.center,
+                        ),
                         const SizedBox(height: 12),
                         OutlinedButton(
-                          onPressed: state.isRefreshingProfile
+                          onPressed: subscription.loading
                               ? null
                               : () =>
-                                    context.read<PlanCubit>().refreshProfile(),
+                                    context.read<SubscriptionCubit>().refresh(),
                           child: const Text('Reintentar'),
                         ),
                       ],
@@ -124,71 +121,78 @@ class _PlansScreenState extends State<PlansScreen> with WidgetsBindingObserver {
                 );
               }
 
-              final now = DateTime.now().toUtc();
-              final isPremium = user.isPremiumActiveAt(now);
-              final isExpired = user.isPremiumExpiredAt(now);
+              final isPremium = access.isPremium;
 
-              return ListView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-                children: [
-                  if (state.isRefreshingProfile)
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: 12),
-                      child: LinearProgressIndicator(minHeight: 2),
+              return RefreshIndicator(
+                onRefresh: context.read<SubscriptionCubit>().refresh,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+                  children: [
+                    if (subscription.loading)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 12),
+                        child: LinearProgressIndicator(minHeight: 2),
+                      ),
+                    _CurrentPlanCard(
+                      planName: isPremium ? 'Premium' : 'Free',
+                      isPremium: isPremium,
+                      premiumUntil: access.premiumUntil,
                     ),
-                  _CurrentPlanCard(
-                    planName: isPremium ? 'Premium' : 'Free',
-                    isPremium: isPremium,
-                    isExpired: isExpired,
-                    premiumUntil: user.premiumUntil,
-                  ),
-                  const SizedBox(height: 20),
-                  _PlanCard(
-                    title: 'Free',
-                    subtitle: 'Para comenzar a gestionar tu finca',
-                    price: 'Gratis',
-                    benefits: PlanCatalog.freeBenefits,
-                    active: !isPremium,
-                    activeLabel: 'Plan actual',
-                  ),
-                  const SizedBox(height: 16),
-                  _PlanCard(
-                    title: 'Premium',
-                    subtitle: 'Más capacidad y análisis para tu producción',
-                    price:
-                        '\$${NumberFormat.decimalPattern('es_CO').format(PlanCatalog.premiumPriceInCop)} '
-                        'COP / ${PlanCatalog.premiumDurationDays} días',
-                    benefits: PlanCatalog.premiumBenefits,
-                    active: isPremium,
-                    activeLabel: 'Premium activo',
-                    action: isPremium
-                        ? null
-                        : FilledButton.icon(
-                            onPressed:
-                                _openingCheckout || state.isCreatingCheckout
-                                ? null
-                                : _purchase,
-                            icon: _openingCheckout || state.isCreatingCheckout
-                                ? const SizedBox.square(
-                                    dimension: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.lock_open_rounded),
-                            label: const Text('Adquirir Premium'),
-                          ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Los límites y accesos que se muestran aquí son informativos. '
-                    'La validación de uso y la activación del plan deben ser '
-                    'confirmadas por el backend.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
+                    for (final resource in PlanResource.values)
+                      ListTile(
+                        dense: true,
+                        title: Text(resource.label),
+                        subtitle: Text(access.quota(resource).summary),
+                      ),
+                    if (PlanResource.values
+                        .take(3)
+                        .any((resource) => access.quota(resource).exhausted))
+                      const Text(
+                        'Puedes consultar y editar tus registros existentes. '
+                        'Las nuevas creaciones dependen del cupo disponible.',
+                      ),
+                    const SizedBox(height: 20),
+                    _PlanCard(
+                      title: 'Free',
+                      subtitle: 'Para comenzar a gestionar tu finca',
+                      price: 'Gratis',
+                      benefits: PlanCatalog.freeBenefits,
+                      active: !isPremium,
+                      activeLabel: 'Plan actual',
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    _PlanCard(
+                      title: 'Premium',
+                      subtitle: 'Más capacidad y análisis para tu producción',
+                      price:
+                          '\$${NumberFormat.decimalPattern('es_CO').format(PlanCatalog.premiumPriceInCop)} '
+                          'COP / ${PlanCatalog.premiumDurationDays} días',
+                      benefits: PlanCatalog.premiumBenefits,
+                      active: isPremium,
+                      activeLabel: 'Premium activo',
+                      action: isPremium
+                          ? null
+                          : FilledButton.icon(
+                              onPressed:
+                                  subscription.loading ||
+                                      _openingCheckout ||
+                                      state.isCreatingCheckout
+                                  ? null
+                                  : _purchase,
+                              icon: _openingCheckout || state.isCreatingCheckout
+                                  ? const SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.lock_open_rounded),
+                              label: const Text('Adquirir Premium'),
+                            ),
+                    ),
+                  ],
+                ),
               );
             },
           ),
@@ -202,27 +206,18 @@ class _CurrentPlanCard extends StatelessWidget {
   const _CurrentPlanCard({
     required this.planName,
     required this.isPremium,
-    required this.isExpired,
     required this.premiumUntil,
   });
 
   final String planName;
   final bool isPremium;
-  final bool isExpired;
   final DateTime? premiumUntil;
 
   @override
   Widget build(BuildContext context) {
-    final status = isPremium
-        ? 'Premium activo'
-        : isExpired
-        ? 'Premium vencido'
-        : 'Plan gratuito';
+    final status = isPremium ? 'Premium activo' : 'Plan gratuito';
     final detail = isPremium && premiumUntil != null
         ? 'Vence el ${DateFormat('d MMM yyyy, HH:mm', 'es').format(premiumUntil!.toLocal())}'
-        : isExpired
-        ? 'Venció el ${DateFormat('d MMM yyyy, HH:mm', 'es').format(premiumUntil!.toLocal())}. '
-              'Tu cuenta ahora está en Free; puedes adquirir Premium nuevamente.'
         : 'Actualmente estás usando el plan gratuito.';
 
     return Container(

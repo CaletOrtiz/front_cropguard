@@ -1,3 +1,6 @@
+import 'package:kroppi/features/profile/domain/entities/subscription_access.dart';
+import 'package:kroppi/features/profile/presentation/widgets/subscription_access.dart';
+import 'package:kroppi/core/network/api/api_error_message.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -93,6 +96,10 @@ class _PlotFormScreenState extends State<PlotFormScreen> {
     if (_saving || !_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
+      if (widget.plot == null) {
+        await checkCreationQuota(context, PlanResource.plots);
+      }
+      if (!mounted) return;
       final name = _name.text.trim();
       final areaHa = double.parse(_area.text.trim().replaceAll(',', '.'));
       final plantCount = int.tryParse(_plants.text.trim());
@@ -133,7 +140,9 @@ class _PlotFormScreenState extends State<PlotFormScreen> {
       setState(() => _saving = false);
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('No se pudo guardar: $e')));
+        ..showSnackBar(
+          SnackBar(content: Text('No se pudo guardar: ${apiErrorMessage(e)}')),
+        );
     }
   }
 

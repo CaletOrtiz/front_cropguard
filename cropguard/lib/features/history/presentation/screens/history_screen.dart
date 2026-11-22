@@ -1,3 +1,4 @@
+import 'package:kroppi/features/profile/presentation/widgets/subscription_access.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -12,7 +13,9 @@ import 'package:kroppi/features/history/presentation/widgets/diagnosis_history_c
 import 'package:kroppi/navigation/app_routes.dart';
 
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key});
+  const HistoryScreen({super.key, this.showFullHistory = true});
+
+  final bool showFullHistory;
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
@@ -113,6 +116,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  if (!widget.showFullHistory) const ViewPlansButton(),
                   Expanded(child: _buildBody(context, state)),
                 ],
               );

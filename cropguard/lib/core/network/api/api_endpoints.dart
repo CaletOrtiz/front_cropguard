@@ -32,14 +32,18 @@ class ApiEndpoints {
   /// **GET /diagnoses** (Requiere token)
   /// Lista los diagnósticos del usuario autenticado (soporta `limit` y `offset`).
   static const String diagnoses = '/diagnoses';
+  static const String subscription = '/subscription';
   static const String createPayment = '/payments/create';
 
   /// **GET /diagnoses/{diagnostico_id}** (Requiere token)
   /// Obtiene un diagnóstico propio por su UUID.
-  static String diagnosisById(String diagnosticoId) => '/diagnoses/$diagnosticoId';
+  static String diagnosisById(String diagnosticoId) =>
+      '/diagnoses/$diagnosticoId';
 
-  static String careActivities(String plotId) => '/plots/$plotId/care-activities';
-  static String careActivity(String activityId) => '/care-activities/$activityId';
+  static String careActivities(String plotId) =>
+      '/plots/$plotId/care-activities';
+  static String careActivity(String activityId) =>
+      '/care-activities/$activityId';
   static String careEvidence(String activityId) =>
       '/care-activities/$activityId/evidence';
   static String plotStats(String plotId) => '/plots/$plotId/stats';

@@ -1,3 +1,6 @@
+import 'package:kroppi/features/profile/domain/entities/subscription_access.dart';
+import 'package:kroppi/features/profile/presentation/widgets/subscription_access.dart';
+import 'package:kroppi/core/network/api/api_error_message.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -87,6 +90,8 @@ class _CropFormScreenState extends State<CropFormScreen> {
     }
     setState(() => _saving = true);
     try {
+      await checkCreationQuota(context, PlanResource.crops);
+      if (!mounted) return;
       await _source.createCrop(
         cropTypeId: _typeId!,
         name: _name.text.trim(),
@@ -97,7 +102,7 @@ class _CropFormScreenState extends State<CropFormScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      _msg('No se pudo guardar: $e');
+      _msg('No se pudo guardar: ${apiErrorMessage(e)}');
     }
   }
 
