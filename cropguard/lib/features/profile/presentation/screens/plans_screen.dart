@@ -181,9 +181,8 @@ class _PlansScreenState extends State<PlansScreen> with WidgetsBindingObserver {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Los límites y accesos que se muestran aquí son informativos. '
-                    'La validación de uso y la activación del plan deben ser '
-                    'confirmadas por el backend.',
+                    'Los límites de uso se validan según el plan activo de tu '
+                    'perfil.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AppColors.textSecondary,
                     ),

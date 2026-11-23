@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:kroppi/features/profile/data/datasources/plan_access_remote_data_source.dart';
 import '../../domain/entities/crop_diagnosis.dart';
 import '../../domain/repositories/crop_diagnosis_repository.dart';
 import '../datasources/crop_diagnosis_remote_data_source.dart';
@@ -10,9 +11,13 @@ class CropDiagnosisRepositoryImpl implements CropDiagnosisRepository {
   CropDiagnosisRepositoryImpl({
     CropDiagnosisRemoteDataSource? remoteDataSource,
     Dio? dioClient,
+    required PlanAccessRemoteDataSource planAccess,
   }) : remoteDataSource =
            remoteDataSource ??
-           CropDiagnosisRemoteDataSource(dioClient: dioClient);
+           CropDiagnosisRemoteDataSource(
+             dioClient: dioClient,
+             planAccess: planAccess,
+           );
 
   @override
   Future<CropDiagnosis> analyzeCropImage({

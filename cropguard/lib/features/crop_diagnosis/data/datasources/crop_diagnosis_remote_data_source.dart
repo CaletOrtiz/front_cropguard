@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:kroppi/core/network/api/fastapi_client.dart';
 import 'package:kroppi/core/network/api/services/ai_backend_service.dart';
+import 'package:kroppi/features/profile/data/datasources/plan_access_remote_data_source.dart';
 import '../models/crop_diagnosis_model.dart';
 
 /// Fuente de datos remota para el diagnóstico de cultivos conectada a FastAPI:
@@ -10,10 +11,12 @@ import '../models/crop_diagnosis_model.dart';
 /// - GET  /diagnoses/{diagnostico_id}  -> Detalle por UUID
 class CropDiagnosisRemoteDataSource {
   final AiBackendService _backendService;
+  final PlanAccessRemoteDataSource planAccess;
 
   CropDiagnosisRemoteDataSource({
     AiBackendService? backendService,
     Dio? dioClient,
+    required this.planAccess,
   }) : _backendService =
            backendService ??
            AiBackendService(dio: dioClient ?? FastApiClient.client);
@@ -27,6 +30,7 @@ class CropDiagnosisRemoteDataSource {
     double? latitude,
     double? longitude,
   }) async {
+    await planAccess.ensureCanCreateDiagnosis();
     final responseMap = await _backendService.createDiagnosis(
       imageFile: imageFile,
       plotSamplesId: plotSamplesId,

@@ -25,6 +25,7 @@ import 'package:kroppi/features/loss_estimation/data/repositories/loss_repositor
 import 'package:kroppi/features/loss_estimation/domain/repositories/loss_repository.dart';
 import 'package:kroppi/features/my_crops/data/datasources/my_crops_remote_data_source.dart';
 import 'package:kroppi/features/profile/data/datasources/premium_checkout_remote_data_source.dart';
+import 'package:kroppi/features/profile/data/datasources/plan_access_remote_data_source.dart';
 import 'package:kroppi/features/profile/data/repositories/premium_checkout_repository_impl.dart';
 import 'package:kroppi/features/profile/domain/usecases/create_premium_checkout_usecase.dart';
 import 'package:kroppi/navigation/app_router.dart';
@@ -34,21 +35,21 @@ class KroppiApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final supabaseClient = app_supabase.SupabaseClient.client;
+    final planAccess = PlanAccessRemoteDataSource(supabaseClient);
     final authRepository = AuthRepositoryImpl(
-      AuthRemoteDataSource(
-        SupabaseAuthService(app_supabase.SupabaseClient.client),
-      ),
+      AuthRemoteDataSource(SupabaseAuthService(supabaseClient)),
     );
     final analyzeCropImageUsecase = AnalyzeCropImageUsecase(
-      repository: CropDiagnosisRepositoryImpl(dioClient: FastApiClient.client),
+      repository: CropDiagnosisRepositoryImpl(
+        dioClient: FastApiClient.client,
+        planAccess: planAccess,
+      ),
     );
     final getCurrentUser = GetCurrentUserUsecase(authRepository);
     final createPremiumCheckout = CreatePremiumCheckoutUsecase(
       PremiumCheckoutRepositoryImpl(
-        PremiumCheckoutRemoteDataSource(
-          FastApiClient.client,
-          app_supabase.SupabaseClient.client,
-        ),
+        PremiumCheckoutRemoteDataSource(FastApiClient.client, supabaseClient),
       ),
     );
 
@@ -62,16 +63,21 @@ class KroppiApp extends StatelessWidget {
           value: analyzeCropImageUsecase,
         ),
         RepositoryProvider<MyCropsRemoteDataSource>.value(
-          value: MyCropsRemoteDataSource(AiBackendService()),
+          value: MyCropsRemoteDataSource(
+            AiBackendService(),
+            planAccess: planAccess,
+          ),
         ),
+        RepositoryProvider<PlanAccessRemoteDataSource>.value(value: planAccess),
         RepositoryProvider<FarmRemoteDataSource>(
-          create: (_) =>
-              FarmRemoteDataSource(app_supabase.SupabaseClient.client),
+          create: (_) => FarmRemoteDataSource(supabaseClient),
         ),
         RepositoryProvider<HarvestRepository>(
           create: (_) => HarvestRepositoryImpl(),
         ),
-        RepositoryProvider<LossRepository>(create: (_) => LossRepositoryImpl()),
+        RepositoryProvider<LossRepository>(
+          create: (_) => LossRepositoryImpl(planAccess: planAccess),
+        ),
       ],
       child: BlocProvider(
         create: (context) => AuthBloc(

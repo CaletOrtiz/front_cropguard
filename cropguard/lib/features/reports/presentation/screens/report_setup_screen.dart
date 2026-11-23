@@ -2,11 +2,13 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:kroppi/core/network/api/api_error_message.dart';
 import 'package:kroppi/core/utils/number_format.dart';
 import 'package:kroppi/features/plot_modules/data/plot_modules_remote_data_source.dart';
+import 'package:kroppi/features/profile/data/datasources/plan_access_remote_data_source.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -64,6 +66,9 @@ class _ReportSetupScreenState extends State<ReportSetupScreen> {
       _pdfBytes = null;
     });
     try {
+      await context
+          .read<PlanAccessRemoteDataSource>()
+          .ensureCanGenerateReport();
       final data = await _source.getReportData(
         widget.plotId,
         from: _from,
@@ -373,10 +378,13 @@ class _ReportSetupScreenState extends State<ReportSetupScreen> {
                 ];
               }).toList(),
             ),
-            pw.Text('Total cosechado: ${formatKg(production['harvested_kg'] as num?)}'),
+            pw.Text(
+              'Total cosechado: ${formatKg(production['harvested_kg'] as num?)}',
+            ),
             // Un total por moneda: nunca se suman COP y USD.
-            for (final row in (production['by_currency'] as List? ?? const [])
-                .cast<Map<String, dynamic>>())
+            for (final row
+                in (production['by_currency'] as List? ?? const [])
+                    .cast<Map<String, dynamic>>())
               pw.Text(
                 'Ingresos ${row['currency']}: '
                 '${formatMoney(row['revenue'] as num?, row['currency'].toString())} ${row['currency']}',
@@ -405,19 +413,18 @@ class _ReportSetupScreenState extends State<ReportSetupScreen> {
               if (((losses['estimations'] as List?) ?? const []).length > 1)
                 table(
                   ['Periodo', 'Esperado', 'Cosechado', 'Perdido', 'Monto'],
-                  (losses['estimations'] as List)
-                      .cast<Map<String, dynamic>>()
-                      .map((row) {
-                        final currency = row['currency']?.toString() ?? 'COP';
-                        return [
-                          '${row['period_from']} a ${row['period_to']}',
-                          formatKg(row['expected_yield_kg'] as num?),
-                          formatKg(row['harvested_kg'] as num?),
-                          formatKg(row['lost_kg'] as num?),
-                          '${formatMoney(row['estimated_loss_amount'] as num?, currency)} $currency',
-                        ];
-                      })
-                      .toList(),
+                  (losses['estimations'] as List).cast<Map<String, dynamic>>().map((
+                    row,
+                  ) {
+                    final currency = row['currency']?.toString() ?? 'COP';
+                    return [
+                      '${row['period_from']} a ${row['period_to']}',
+                      formatKg(row['expected_yield_kg'] as num?),
+                      formatKg(row['harvested_kg'] as num?),
+                      formatKg(row['lost_kg'] as num?),
+                      '${formatMoney(row['estimated_loss_amount'] as num?, currency)} $currency',
+                    ];
+                  }).toList(),
                 ),
             ],
           ]),

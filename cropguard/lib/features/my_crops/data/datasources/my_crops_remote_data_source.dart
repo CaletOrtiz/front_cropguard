@@ -1,12 +1,14 @@
 import 'package:kroppi/core/network/api/services/ai_backend_service.dart';
+import 'package:kroppi/features/profile/data/datasources/plan_access_remote_data_source.dart';
 import 'package:kroppi/features/my_crops/domain/entities/my_crop.dart';
 import 'package:kroppi/features/my_crops/domain/entities/plot.dart';
 import 'package:kroppi/features/my_crops/domain/entities/plot_sample.dart';
 
 class MyCropsRemoteDataSource {
-  MyCropsRemoteDataSource(this._api);
+  MyCropsRemoteDataSource(this._api, {required this.planAccess});
 
   final AiBackendService _api;
+  final PlanAccessRemoteDataSource planAccess;
 
   String _date(DateTime d) => d.toIso8601String().split('T').first;
 
@@ -29,6 +31,7 @@ class MyCropsRemoteDataSource {
     DateTime? plantedAt,
     DateTime? expectedHarvestAt,
   }) async {
+    await planAccess.ensureCanCreateCrop();
     await _api.send(
       'POST',
       '/crops',
@@ -61,6 +64,7 @@ class MyCropsRemoteDataSource {
     int? plantCount,
     String? variety,
   }) async {
+    await planAccess.ensureCanCreatePlot();
     await _api.send(
       'POST',
       '/crops/$cropId/plots',

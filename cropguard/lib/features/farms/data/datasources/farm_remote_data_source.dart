@@ -1,12 +1,15 @@
 import 'package:kroppi/features/farms/domain/entities/farm.dart';
 import 'package:kroppi/features/farms/domain/entities/farm_details.dart';
 import 'package:kroppi/features/home/domain/entities/home_dashboard.dart';
+import 'package:kroppi/features/profile/data/datasources/plan_access_remote_data_source.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class FarmRemoteDataSource {
-  FarmRemoteDataSource(this._client);
+  FarmRemoteDataSource(this._client)
+    : _planAccess = PlanAccessRemoteDataSource(_client);
 
   final SupabaseClient _client;
+  final PlanAccessRemoteDataSource _planAccess;
 
   Future<void> createFarm({
     required String name,
@@ -17,6 +20,7 @@ class FarmRemoteDataSource {
     String? address,
   }) async {
     final userId = _requireUserId();
+    await _planAccess.ensureCanCreateFarm();
     await _client.from('farms').insert({
       'owner_id': userId,
       'name': name.trim(),
@@ -197,6 +201,7 @@ class FarmRemoteDataSource {
     DateTime? expectedHarvestAt,
   }) async {
     _requireUserId();
+    await _planAccess.ensureCanCreateCrop();
     await _client.from('crops').insert({
       'farm_id': farmId,
       'crop_type_id': cropTypeId,
@@ -237,6 +242,7 @@ class FarmRemoteDataSource {
     String? variety,
   }) async {
     final crop = await getFarmCrop(cropId);
+    await _planAccess.ensureCanCreatePlot();
     await _validatePlotArea(crop.farmId, areaHa);
     await _client.from('plots').insert({
       'crop_id': cropId,
