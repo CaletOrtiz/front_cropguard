@@ -215,14 +215,6 @@ class _DashboardContent extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         QuickAccessTile(
-          icon: Icons.menu_book_rounded,
-          label: AppStrings.cropGuide,
-          subtitle: AppStrings.cropGuideHint,
-          tone: QuickAccessTone.lime,
-          onTap: () => context.go(AppRoutes.guide),
-        ),
-        const SizedBox(height: 12),
-        QuickAccessTile(
           icon: Icons.person_outline_rounded,
           label: AppStrings.profile,
           subtitle: AppStrings.profileHint,

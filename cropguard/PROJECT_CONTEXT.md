@@ -17,7 +17,7 @@ Aplicación Flutter orientada al diagnóstico agronómico de cultivos mediante a
 - consultar estadísticas e historial cronológico (timeline) de cada lote,
 - registrar cosechas y estimaciones de pérdidas por lote,
 - generar, guardar y compartir informes PDF por lote,
-- consultar guía estática de cultivos y perfil del usuario.
+- consultar y gestionar el perfil del usuario.
 
 ### Problema que busca resolver
 El proyecto aborda la necesidad de facilitar la identificación de problemas fitosanitarios en cultivos a partir de imágenes tomadas en campo, reduciendo la dependencia de diagnósticos manuales o de expertos en tiempo real. La app integra autenticación, gestión de parcelas y análisis de imágenes con un backend de IA.
@@ -50,7 +50,6 @@ El repositorio refleja una aplicación funcional de frontend móvil con varios f
 - timeline de eventos por lote,
 - informes PDF por lote (generación local, subida al backend, visualización/impresión y compartir),
 - vista general de lotes con filtros (todos / alerta / peligro),
-- guía de cultivos,
 - perfil de usuario.
 
 El proyecto no contiene una base de datos local ni un backend propio dentro del repositorio; la persistencia y autenticación se resuelven con servicios externos.
@@ -265,7 +264,6 @@ Cada feature encapsula su propia lógica y UI:
 - `home/`
 - `my_crops/`
 - `profile/`
-- `guide/`
 - `sampling/`
 - `plot_modules/` (solo `data/plot_modules_remote_data_source.dart`)
 - `care_log/` (presentación para bitácora de cuidados)
@@ -368,11 +366,10 @@ El flujo de diagnóstico usa:
 
 La imagen se envía con `MultipartFile` y el backend debe responder con un resultado estructurado.
 
-#### F. Historias de uso, perfil y guía
+#### F. Historial, perfil y muestreos
 La app también incluye:
 
 - `history`: listado y detalle de diagnósticos,
-- `guide`: información estática por cultivos,
 - `profile`: edición de perfil personal,
 - `sampling`: procesamiento de muestreos y seguimiento por parcela.
 
@@ -734,7 +731,6 @@ El repositorio usa `flutter_lints` vía `analysis_options.yaml`. `flutter analyz
 - timeline de eventos por lote con filtros y paginación,
 - informes PDF por lote (generar, guardar en backend, ver/imprimir, compartir, eliminar),
 - localización en español (fechas y widgets Material),
-- guía de cultivos,
 - edición de perfil,
 - navegación basada en rutas y shell.
 

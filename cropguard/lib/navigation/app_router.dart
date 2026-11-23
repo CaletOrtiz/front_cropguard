@@ -47,12 +47,6 @@ import 'package:kroppi/features/crop_diagnosis/domain/usecases/analyze_crop_imag
 import 'package:kroppi/features/crop_diagnosis/presentation/bloc/diagnosis_bloc.dart';
 import 'package:kroppi/features/crop_diagnosis/presentation/screens/diagnosis_screen.dart';
 
-// Guía estática
-import 'package:kroppi/features/guide/presentation/screens/crops_screen.dart'
-    as guide;
-import 'package:kroppi/features/guide/presentation/screens/crop_detail_screen.dart'
-    as guide_detail;
-
 // Mis cultivos y muestreo
 import 'package:kroppi/features/my_crops/data/datasources/my_crops_remote_data_source.dart';
 import 'package:kroppi/features/my_crops/presentation/cubit/plot_detail_cubit.dart';
@@ -443,18 +437,6 @@ class AppRouter {
             child: SamplingScreen(plotId: plotId),
           );
         },
-      ),
-
-      // --- Guía estática (movida desde /crops) ---
-      GoRoute(
-        path: AppRoutes.guide,
-        builder: (context, state) => const guide.CropsScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.guideDetail,
-        builder: (context, state) => guide_detail.CropDetailScreen(
-          cropId: state.pathParameters['cropId']!,
-        ),
       ),
 
       // --- Perfil, historial y utilidades ---

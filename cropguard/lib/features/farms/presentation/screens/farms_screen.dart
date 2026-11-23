@@ -56,16 +56,6 @@ class FarmsScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              TextButton.icon(
-                style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  foregroundColor: AppColors.primaryDark,
-                ),
-                onPressed: () => context.push(AppRoutes.guide),
-                icon: const Icon(Icons.menu_book_rounded, size: 18),
-                label: const Text('Guía de cultivos'),
-              ),
-              const SizedBox(height: 8),
               Expanded(
                 child: BlocBuilder<FarmsCubit, FarmsState>(
                   builder: (context, state) {

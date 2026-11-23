@@ -44,7 +44,6 @@ class AppStrings {
       'Toma una foto de la hoja y deja que la IA haga el análisis.';
   static const quickAccess = 'Accesos rápidos';
   static const myDiagnoses = 'Mis diagnósticos';
-  static const cropGuide = 'Guía de cultivos';
   static const profile = 'Perfil';
   static const homeSummary = 'Resumen';
   static const farms = 'Fincas';
@@ -84,15 +83,6 @@ class AppStrings {
   static const emptyHistorySubtitle =
       'Los análisis que guardes aparecerán aquí.';
 
-  // Cultivos
-  static const cropsTitle = 'Guía de cultivos';
-  static const cropsSubtitle =
-      'Aprende a identificar y prevenir enfermedades comunes.';
-  static const commonDiseases = 'Enfermedades comunes';
-  static const characteristicSymptoms = 'Síntomas característicos';
-  static const monitoringTipsTitle = 'Consejos de monitoreo';
-  static const preventionTipsTitle = 'Recomendaciones preventivas';
-
   // Recomendaciones
   static const recommendationsTitle = 'Recomendaciones';
 
@@ -114,7 +104,6 @@ class AppStrings {
 
   static const seeAll = 'Ver todos';
   static const myDiagnosesHint = 'Revisa tus análisis anteriores';
-  static const cropGuideHint = 'Aprende sobre tus cultivos';
   static const profileHint = 'Gestiona tu cuenta y datos';
 
   static const searchCropHint = 'Buscar cultivo...';

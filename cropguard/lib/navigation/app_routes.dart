@@ -93,11 +93,6 @@ class AppRoutes {
   static const reportNew = '/plots/:plotId/reports/new';
   static String reportNewPath(String id) => '/plots/$id/reports/new';
 
-  // Guía estática (antes /crops)
-  static const guide = '/guide';
-  static const guideDetail = '/guide/:cropId';
-  static String guideDetailPath(String id) => '/guide/$id';
-
   // Detalle de un diagnóstico del historial
   static const diagnosisDetail = '/history/:diagnosisId';
   static String diagnosisDetailPath(String id) => '/history/$id';
